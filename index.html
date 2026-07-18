@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f7fb" />
+    <title>SwagEx</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <div class="brand-mark" aria-hidden="true">SX</div>
+        <div>
+          <p class="eyebrow">EXPORT LOCAL</p>
+          <h1>SwagEx</h1>
+        </div>
+      </header>
+
+      <section class="card hero-card" aria-labelledby="hero-title">
+        <div class="status-dot" id="status-dot" aria-hidden="true"></div>
+        <p class="eyebrow" id="phase-label">PRÊT</p>
+        <h2 id="hero-title">Exporter votre compte</h2>
+        <p class="hero-copy" id="status-message">
+          Un export local, en un seul fichier JSON. Rien n’est envoyé sur Internet par SwagEx.
+        </p>
+        <button class="primary-button" id="primary-action" type="button">Exporter mon compte</button>
+        <p class="error-message" id="error-message" role="alert" hidden></p>
+      </section>
+
+      <section class="card setup-card" id="setup-card" aria-labelledby="setup-title" hidden>
+        <div class="setup-heading">
+          <div>
+            <p class="eyebrow">IPHONE</p>
+            <h2 id="setup-title">Préparer le téléphone</h2>
+          </div>
+          <span class="port-pill" id="proxy-address">—</span>
+        </div>
+
+        <div class="setup-grid">
+          <div class="qr-panel">
+            <img id="certificate-qr" alt="QR code pour télécharger le certificat SwagEx" />
+            <p>Scannez avec l’iPhone connecté au même Wi-Fi.</p>
+          </div>
+          <ol class="steps">
+            <li>Ouvrez le lien et installez le profil SwagEx.</li>
+            <li>Dans <strong>Réglages › Général › Informations › Réglages de confiance des certificats</strong>, activez SwagEx.</li>
+            <li>Dans le Wi-Fi de l’iPhone, configurez le proxy manuel avec l’adresse et le port affichés.</li>
+            <li>Ouvrez le jeu et connectez-vous. L’export démarre automatiquement.</li>
+          </ol>
+        </div>
+
+        <div class="link-row">
+          <code id="certificate-url">—</code>
+          <button class="secondary-button" id="copy-link" type="button">Copier le lien</button>
+        </div>
+        <button class="text-button" id="cancel-action" type="button">Arrêter</button>
+      </section>
+
+      <section class="card success-card" id="success-card" aria-labelledby="success-title" hidden>
+        <p class="eyebrow">EXPORT TERMINÉ</p>
+        <h2 id="success-title">Votre JSON est prêt</h2>
+        <p class="hero-copy" id="export-name">—</p>
+        <button class="secondary-button" id="reveal-export" type="button">Afficher dans le Finder</button>
+        <button class="text-button" id="new-export" type="button">Faire un nouvel export</button>
+      </section>
+
+      <footer class="app-footer">SwagEx ne lit que votre propre profil et ne modifie pas le jeu.</footer>
+    </main>
+  </body>
+</html>

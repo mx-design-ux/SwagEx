@@ -1,0 +1,37 @@
+[package]
+name = "swagex"
+version = "0.1.0"
+description = "Export local d'un profil de compte en JSON"
+authors = ["SwagEx contributors"]
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "swagex_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+aes = "0.8"
+anyhow = "1"
+base64 = "0.22"
+cbc = "0.1"
+flate2 = "1"
+http-body-util = "0.1"
+hudsucker = "0.25"
+rcgen = { version = "0.14", features = ["x509-parser"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio-util = "0.7"
+
+[dev-dependencies]
+tempfile = "3"
