@@ -2,11 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import * as QRCode from "qrcode";
 
-type Phase = "idle" | "listening" | "captured" | "error";
+type Phase = "idle" | "setup" | "listening" | "captured" | "error";
 
 type StatusSnapshot = {
   phase: Phase;
   message: string;
+  setupCompleted: boolean;
   localIp?: string;
   port?: number;
   certificateUrl?: string;
@@ -20,14 +21,19 @@ const elements = {
   statusDot: document.querySelector<HTMLElement>("#status-dot")!,
   statusMessage: document.querySelector<HTMLElement>("#status-message")!,
   primaryAction: document.querySelector<HTMLButtonElement>("#primary-action")!,
+  setupAgain: document.querySelector<HTMLButtonElement>("#setup-again")!,
   errorMessage: document.querySelector<HTMLElement>("#error-message")!,
   setupCard: document.querySelector<HTMLElement>("#setup-card")!,
+  captureCard: document.querySelector<HTMLElement>("#capture-card")!,
   successCard: document.querySelector<HTMLElement>("#success-card")!,
   proxyAddress: document.querySelector<HTMLElement>("#proxy-address")!,
+  captureAddress: document.querySelector<HTMLElement>("#capture-address")!,
   certificateUrl: document.querySelector<HTMLElement>("#certificate-url")!,
   certificateQr: document.querySelector<HTMLImageElement>("#certificate-qr")!,
   copyLink: document.querySelector<HTMLButtonElement>("#copy-link")!,
-  cancelAction: document.querySelector<HTMLButtonElement>("#cancel-action")!,
+  completeSetup: document.querySelector<HTMLButtonElement>("#complete-setup")!,
+  cancelSetup: document.querySelector<HTMLButtonElement>("#cancel-setup")!,
+  cancelCapture: document.querySelector<HTMLButtonElement>("#cancel-capture")!,
   exportName: document.querySelector<HTMLElement>("#export-name")!,
   revealExport: document.querySelector<HTMLButtonElement>("#reveal-export")!,
   newExport: document.querySelector<HTMLButtonElement>("#new-export")!,
@@ -39,6 +45,7 @@ let pollTimer: number | undefined;
 function phaseLabel(phase: Phase): string {
   return {
     idle: "PRÊT",
+    setup: "CONFIGURATION IPHONE",
     listening: "EN ATTENTE DU JEU",
     captured: "EXPORT TERMINÉ",
     error: "ERREUR",
@@ -53,15 +60,22 @@ function updateStatus(status: StatusSnapshot): void {
   elements.errorMessage.hidden = status.phase !== "error";
   elements.errorMessage.textContent = status.phase === "error" ? status.message : "";
 
+  const inSetup = status.phase === "setup";
   const listening = status.phase === "listening";
   const captured = status.phase === "captured";
-  elements.setupCard.hidden = !listening;
-  elements.successCard.hidden = !captured;
-  elements.primaryAction.hidden = listening || captured;
-  elements.primaryAction.disabled = false;
-  elements.primaryAction.textContent = status.phase === "error" ? "Réessayer" : "Exporter mon compte";
+  const busy = inSetup || listening || captured;
 
-  if (listening && status.localIp && status.port && status.certificateUrl) {
+  elements.setupCard.hidden = !inSetup;
+  elements.captureCard.hidden = !listening;
+  elements.successCard.hidden = !captured;
+  elements.primaryAction.hidden = busy;
+  elements.primaryAction.disabled = false;
+  elements.primaryAction.textContent = status.setupCompleted
+    ? "Exporter un JSON frais"
+    : "Configurer mon iPhone";
+  elements.setupAgain.hidden = !status.setupCompleted || busy;
+
+  if (inSetup && status.localIp && status.port && status.certificateUrl) {
     const address = `${status.localIp}:${status.port}`;
     elements.proxyAddress.textContent = address;
     elements.certificateUrl.textContent = status.certificateUrl;
@@ -72,6 +86,10 @@ function updateStatus(status: StatusSnapshot): void {
     }).then((url) => {
       elements.certificateQr.src = url;
     });
+  }
+
+  if (listening && status.localIp && status.port) {
+    elements.captureAddress.textContent = `${status.localIp}:${status.port}`;
   }
 
   if (captured) {
@@ -88,9 +106,45 @@ async function refreshStatus(): Promise<void> {
   }
 }
 
+async function initialize(): Promise<void> {
+  try {
+    const status = await invoke<StatusSnapshot>("export_status");
+    updateStatus(status);
+    if (!status.setupCompleted && status.phase === "idle") {
+      await startSetup();
+    }
+  } catch (error) {
+    elements.errorMessage.hidden = false;
+    elements.errorMessage.textContent = String(error);
+  }
+}
+
 function beginPolling(): void {
-  if (pollTimer !== undefined) window.clearInterval(pollTimer);
+  stopPolling();
   pollTimer = window.setInterval(() => void refreshStatus(), 500);
+}
+
+function stopPolling(): void {
+  if (pollTimer !== undefined) {
+    window.clearInterval(pollTimer);
+    pollTimer = undefined;
+  }
+}
+
+async function startSetup(): Promise<void> {
+  elements.primaryAction.disabled = true;
+  elements.errorMessage.hidden = true;
+  try {
+    updateStatus(await invoke<StatusSnapshot>("start_setup"));
+    beginPolling();
+  } catch (error) {
+    updateStatus({
+      phase: "error",
+      message: String(error),
+      setupCompleted: false,
+      certificateWasCreated: false,
+    });
+  }
 }
 
 async function startExport(): Promise<void> {
@@ -103,14 +157,43 @@ async function startExport(): Promise<void> {
     updateStatus({
       phase: "error",
       message: String(error),
+      setupCompleted: latestStatus?.setupCompleted ?? false,
+      certificateWasCreated: false,
+    });
+  }
+}
+
+async function completeSetup(): Promise<void> {
+  try {
+    updateStatus(await invoke<StatusSnapshot>("complete_setup"));
+    stopPolling();
+  } catch (error) {
+    updateStatus({
+      phase: "error",
+      message: String(error),
+      setupCompleted: false,
+      certificateWasCreated: false,
+    });
+  }
+}
+
+async function resetSetup(): Promise<void> {
+  try {
+    updateStatus(await invoke<StatusSnapshot>("reset_setup"));
+    await startSetup();
+  } catch (error) {
+    updateStatus({
+      phase: "error",
+      message: String(error),
+      setupCompleted: false,
       certificateWasCreated: false,
     });
   }
 }
 
 async function cancelExport(): Promise<void> {
-  await invoke<StatusSnapshot>("cancel_export");
-  await refreshStatus();
+  updateStatus(await invoke<StatusSnapshot>("cancel_export"));
+  stopPolling();
 }
 
 async function copyLink(): Promise<void> {
@@ -124,12 +207,21 @@ async function copyLink(): Promise<void> {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  elements.primaryAction.addEventListener("click", () => void startExport());
-  elements.cancelAction.addEventListener("click", () => void cancelExport());
+  elements.primaryAction.addEventListener("click", () => {
+    if (latestStatus?.setupCompleted) {
+      void startExport();
+    } else {
+      void startSetup();
+    }
+  });
+  elements.setupAgain.addEventListener("click", () => void resetSetup());
+  elements.completeSetup.addEventListener("click", () => void completeSetup());
+  elements.cancelSetup.addEventListener("click", () => void cancelExport());
+  elements.cancelCapture.addEventListener("click", () => void cancelExport());
   elements.copyLink.addEventListener("click", () => void copyLink());
   elements.newExport.addEventListener("click", () => void startExport());
   elements.revealExport.addEventListener("click", () => {
     if (latestStatus?.exportPath) void revealItemInDir(latestStatus.exportPath);
   });
-  void refreshStatus();
+  void initialize();
 });

@@ -23,7 +23,7 @@ button { font: inherit; }
 
 .card { position: relative; padding: 28px; border: 1px solid #e5eaf2; border-radius: 20px; background: #fff; box-shadow: 0 12px 30px #243b6310; }
 .hero-card { text-align: center; }
-.hero-card h2, .setup-card h2, .success-card h2 { margin: 7px 0 8px; color: #172033; font-size: 26px; letter-spacing: -.04em; }
+.hero-card h2, .setup-card h2, .capture-card h2, .success-card h2 { margin: 7px 0 8px; color: #172033; font-size: 26px; letter-spacing: -.04em; }
 .hero-copy { max-width: 500px; margin: 0 auto 22px; color: #66738a; line-height: 1.55; }
 .status-dot { width: 10px; height: 10px; margin: 0 auto 14px; border-radius: 50%; background: #29a36a; box-shadow: 0 0 0 5px #29a36a18; }
 .status-dot[data-phase="listening"] { background: #f19a38; box-shadow: 0 0 0 5px #f19a3818; animation: pulse 1.5s infinite; }
@@ -40,7 +40,7 @@ button:disabled { cursor: wait; opacity: .65; }
 .text-button:hover { color: #1f6feb; }
 .error-message { margin: 16px 0 0; color: #bb3948; font-size: 13px; }
 
-.setup-card, .success-card { margin-top: 14px; }
+.setup-card, .capture-card, .success-card { margin-top: 14px; }
 .setup-heading { display: flex; align-items: start; justify-content: space-between; gap: 20px; }
 .setup-heading h2 { font-size: 21px; }
 .port-pill { margin-top: 2px; padding: 6px 9px; border-radius: 8px; color: #235486; background: #edf5ff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
@@ -56,6 +56,9 @@ button:disabled { cursor: wait; opacity: .65; }
 .success-card { text-align: center; }
 .success-card h2 { font-size: 22px; }
 .success-card .hero-copy { margin-bottom: 18px; overflow: hidden; color: #536179; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.capture-card { text-align: center; }
+.capture-card h2 { font-size: 22px; }
+.capture-address { display: inline-block; margin-top: 2px; }
 .app-footer { padding: 20px 0 0; color: #8792a5; text-align: center; font-size: 11px; }
 
 [hidden] { display: none !important; }
@@ -65,7 +68,7 @@ button:disabled { cursor: wait; opacity: .65; }
 @media (prefers-color-scheme: dark) {
   :root { color: #e7edf8; background: #111827; }
   .card { border-color: #25324a; background: #182235; box-shadow: none; }
-  .hero-card h2, .setup-card h2, .success-card h2 { color: #f0f4fb; }
+  .hero-card h2, .setup-card h2, .capture-card h2, .success-card h2 { color: #f0f4fb; }
   .hero-copy, .steps { color: #adbad0; }
   .secondary-button { border-color: #33435e; color: #d7e2f3; background: #1c293e; }
   .link-row { border-color: #2c3b55; background: #111a2b; }

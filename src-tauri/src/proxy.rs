@@ -1,4 +1,9 @@
-use crate::{certificate::ensure_certificate, export::write_profile, protocol::decode_profile};
+use crate::{
+    certificate::ensure_certificate,
+    export::write_profile,
+    protocol::decode_profile,
+    setup::{self, SetupSettings},
+};
 use flate2::read::{GzDecoder, ZlibDecoder};
 use http_body_util::BodyExt;
 use hudsucker::{
@@ -26,6 +31,7 @@ const PROFILE_PATH: &str = "/api/gateway_c2.php";
 pub struct StatusSnapshot {
     pub phase: String,
     pub message: String,
+    pub setup_completed: bool,
     pub local_ip: Option<String>,
     pub port: Option<u16>,
     pub certificate_url: Option<String>,
@@ -35,10 +41,15 @@ pub struct StatusSnapshot {
 }
 
 impl StatusSnapshot {
-    fn idle() -> Self {
+    fn idle(setup_completed: bool) -> Self {
         Self {
             phase: "idle".into(),
-            message: "Prêt à exporter votre compte.".into(),
+            message: if setup_completed {
+                "Votre iPhone est configuré. Vous pouvez exporter un JSON frais.".into()
+            } else {
+                "Configurez votre iPhone pour commencer.".into()
+            },
+            setup_completed,
             local_ip: None,
             port: None,
             certificate_url: None,
@@ -88,7 +99,7 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             shared: Arc::new(SharedState {
-                status: Mutex::new(StatusSnapshot::idle()),
+                status: Mutex::new(StatusSnapshot::idle(false)),
             }),
             cancel: Mutex::new(None),
         }
@@ -105,6 +116,7 @@ impl Drop for AppState {
 
 #[derive(Clone)]
 struct CaptureHandler {
+    capture_enabled: bool,
     is_profile_request: bool,
     certificate_der: Arc<Vec<u8>>,
     output_directory: Arc<PathBuf>,
@@ -148,7 +160,7 @@ impl HttpHandler for CaptureHandler {
         _context: &HttpContext,
         response: Response<Body>,
     ) -> Response<Body> {
-        if !self.is_profile_request {
+        if !self.capture_enabled || !self.is_profile_request {
             return response;
         }
 
@@ -227,10 +239,11 @@ fn decode_http_body(headers: &header::HeaderMap, body: &[u8]) -> Option<Vec<u8>>
 }
 
 async fn bind_listener(address: Ipv4Addr) -> anyhow::Result<TcpListener> {
-    match TcpListener::bind((address, PREFERRED_PROXY_PORT)).await {
-        Ok(listener) => Ok(listener),
-        Err(_) => Ok(TcpListener::bind((address, 0)).await?),
-    }
+    TcpListener::bind((address, PREFERRED_PROXY_PORT))
+        .await
+        .map_err(|error| {
+            anyhow::anyhow!("le port {PREFERRED_PROXY_PORT} est indisponible : {error}")
+        })
 }
 
 fn local_ipv4() -> anyhow::Result<Ipv4Addr> {
@@ -242,9 +255,124 @@ fn local_ipv4() -> anyhow::Result<Ipv4Addr> {
     }
 }
 
+fn app_data_directory(app: &AppHandle) -> anyhow::Result<PathBuf> {
+    Ok(app.path().app_data_dir()?)
+}
+
+fn configured(app: &AppHandle) -> anyhow::Result<bool> {
+    Ok(setup::read(&app_data_directory(app)?)?.setup_completed)
+}
+
+fn cancel_running_proxy(state: &AppState) -> anyhow::Result<()> {
+    if let Some(previous) = state
+        .cancel
+        .lock()
+        .map_err(|_| anyhow::anyhow!("état interne indisponible"))?
+        .take()
+    {
+        previous.cancel();
+    }
+    Ok(())
+}
+
+async fn start_proxy(
+    app: AppHandle,
+    state: &AppState,
+    capture_enabled: bool,
+) -> anyhow::Result<StatusSnapshot> {
+    cancel_running_proxy(state)?;
+
+    let app_data = app_data_directory(&app)?;
+    let output_directory = app.path().download_dir()?;
+    let local_ip = local_ipv4()?;
+    let certificate = ensure_certificate(&app_data.join("certificate"))?;
+    let certificate_was_created = certificate.was_created;
+    let certificate_der = Arc::new(certificate.der);
+    let listener = bind_listener(local_ip).await?;
+    let port = listener.local_addr()?.port();
+    let certificate_url = format!("http://{local_ip}:{port}/certificate");
+    let setup_completed = configured(&app)?;
+    let cancel = CancellationToken::new();
+
+    let handler = CaptureHandler {
+        capture_enabled,
+        is_profile_request: false,
+        certificate_der,
+        output_directory: Arc::new(output_directory),
+        shared: Arc::clone(&state.shared),
+        cancel: cancel.clone(),
+    };
+    let authority = RcgenAuthority::new(certificate.issuer, 128, aws_lc_rs::default_provider());
+    let proxy = Proxy::builder()
+        .with_listener(listener)
+        .with_ca(authority)
+        .with_rustls_connector(aws_lc_rs::default_provider())
+        .with_http_handler(handler)
+        .with_graceful_shutdown(cancel.clone().cancelled_owned())
+        .build()?;
+
+    let status = StatusSnapshot {
+        phase: if capture_enabled {
+            "listening"
+        } else {
+            "setup"
+        }
+        .into(),
+        message: if capture_enabled {
+            "Ouvrez Summoners War et connectez-vous sur l’iPhone configuré.".into()
+        } else {
+            "Suivez les étapes ci-dessous, puis validez la configuration.".into()
+        },
+        setup_completed,
+        local_ip: Some(local_ip.to_string()),
+        port: Some(port),
+        certificate_url: Some(certificate_url),
+        certificate_was_created,
+        export_path: None,
+        profile_name: None,
+    };
+    state.shared.replace(status.clone());
+    *state
+        .cancel
+        .lock()
+        .map_err(|_| anyhow::anyhow!("état interne indisponible"))? = Some(cancel);
+
+    let shared = Arc::clone(&state.shared);
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = proxy.start().await {
+            shared.record_proxy_error(error);
+        }
+    });
+
+    Ok(status)
+}
+
 #[tauri::command]
-pub fn export_status(state: State<'_, AppState>) -> StatusSnapshot {
-    state.shared.snapshot()
+pub fn export_status(app: AppHandle, state: State<'_, AppState>) -> Result<StatusSnapshot, String> {
+    let setup_completed = configured(&app).map_err(|error| error.to_string())?;
+    let mut status = state.shared.snapshot();
+    status.setup_completed = setup_completed;
+    if status.phase == "idle" {
+        status.message = StatusSnapshot::idle(setup_completed).message;
+    }
+    Ok(status)
+}
+
+#[tauri::command]
+pub async fn start_setup(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StatusSnapshot, String> {
+    start_proxy(app, &state, false).await.map_err(|error| {
+        let message = error.to_string();
+        let setup_completed = state.shared.snapshot().setup_completed;
+        state.shared.replace(StatusSnapshot {
+            phase: "error".into(),
+            message: message.clone(),
+            ..StatusSnapshot::idle(setup_completed)
+        });
+        message
+    })
 }
 
 #[tauri::command]
@@ -252,92 +380,55 @@ pub async fn start_export(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<StatusSnapshot, String> {
-    if let Some(previous) = state
-        .cancel
-        .lock()
-        .map_err(|_| "état interne indisponible")?
-        .take()
-    {
-        previous.cancel();
+    if !configured(&app).map_err(|error| error.to_string())? {
+        return Err("Configurez d’abord l’iPhone dans SwagEx.".into());
     }
 
-    let result = async {
-        let app_data = app.path().app_data_dir()?;
-        let output_directory = app.path().download_dir()?;
-        let local_ip = local_ipv4()?;
-        let certificate = ensure_certificate(&app_data.join("certificate"))?;
-        let certificate_was_created = certificate.was_created;
-        let certificate_der = Arc::new(certificate.der);
-        let listener = bind_listener(local_ip).await?;
-        let port = listener.local_addr()?.port();
-        let certificate_url = format!("http://{local_ip}:{port}/certificate");
-        let cancel = CancellationToken::new();
-
-        let handler = CaptureHandler {
-            is_profile_request: false,
-            certificate_der,
-            output_directory: Arc::new(output_directory),
-            shared: Arc::clone(&state.shared),
-            cancel: cancel.clone(),
-        };
-        let authority = RcgenAuthority::new(certificate.issuer, 128, aws_lc_rs::default_provider());
-        let proxy = Proxy::builder()
-            .with_listener(listener)
-            .with_ca(authority)
-            .with_rustls_connector(aws_lc_rs::default_provider())
-            .with_http_handler(handler)
-            .with_graceful_shutdown(cancel.clone().cancelled_owned())
-            .build()?;
-
-        let status = StatusSnapshot {
-            phase: "listening".into(),
-            message: "SwagEx attend la connexion du jeu.".into(),
-            local_ip: Some(local_ip.to_string()),
-            port: Some(port),
-            certificate_url: Some(certificate_url),
-            certificate_was_created,
-            export_path: None,
-            profile_name: None,
-        };
-        state.shared.replace(status.clone());
-        *state
-            .cancel
-            .lock()
-            .map_err(|_| anyhow::anyhow!("état interne indisponible"))? = Some(cancel);
-
-        let shared = Arc::clone(&state.shared);
-        tauri::async_runtime::spawn(async move {
-            if let Err(error) = proxy.start().await {
-                shared.record_proxy_error(error);
-            }
-        });
-
-        anyhow::Ok(status)
-    }
-    .await;
-
-    result.map_err(|error| {
+    start_proxy(app, &state, true).await.map_err(|error| {
         let message = error.to_string();
         state.shared.replace(StatusSnapshot {
             phase: "error".into(),
             message: message.clone(),
-            ..StatusSnapshot::idle()
+            ..StatusSnapshot::idle(true)
         });
         message
     })
 }
 
 #[tauri::command]
-pub fn cancel_export(state: State<'_, AppState>) -> Result<StatusSnapshot, String> {
-    if let Some(cancel) = state
-        .cancel
-        .lock()
-        .map_err(|_| "état interne indisponible")?
-        .take()
-    {
-        cancel.cancel();
-    }
-    let status = StatusSnapshot::idle();
+pub fn complete_setup(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StatusSnapshot, String> {
+    cancel_running_proxy(&state).map_err(|error| error.to_string())?;
+    let app_data = app_data_directory(&app).map_err(|error| error.to_string())?;
+    setup::write(
+        &app_data,
+        SetupSettings {
+            setup_completed: true,
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    let status = StatusSnapshot::idle(true);
+    state.shared.replace(status.clone());
+    Ok(status)
+}
+
+#[tauri::command]
+pub fn reset_setup(app: AppHandle, state: State<'_, AppState>) -> Result<StatusSnapshot, String> {
+    cancel_running_proxy(&state).map_err(|error| error.to_string())?;
+    let app_data = app_data_directory(&app).map_err(|error| error.to_string())?;
+    setup::reset(&app_data).map_err(|error| error.to_string())?;
+    let status = StatusSnapshot::idle(false);
+    state.shared.replace(status.clone());
+    Ok(status)
+}
+
+#[tauri::command]
+pub fn cancel_export(app: AppHandle, state: State<'_, AppState>) -> Result<StatusSnapshot, String> {
+    cancel_running_proxy(&state).map_err(|error| error.to_string())?;
+    let setup_completed = configured(&app).map_err(|error| error.to_string())?;
+    let status = StatusSnapshot::idle(setup_completed);
     state.shared.replace(status.clone());
     Ok(status)
 }

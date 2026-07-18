@@ -26,6 +26,7 @@
           Un export local, en un seul fichier JSON. Rien n’est envoyé sur Internet par SwagEx.
         </p>
         <button class="primary-button" id="primary-action" type="button">Exporter mon compte</button>
+        <button class="text-button" id="setup-again" type="button" hidden>Refaire la configuration iPhone</button>
         <p class="error-message" id="error-message" role="alert" hidden></p>
       </section>
 
@@ -47,7 +48,7 @@
             <li>Ouvrez le lien et installez le profil SwagEx.</li>
             <li>Dans <strong>Réglages › Général › Informations › Réglages de confiance des certificats</strong>, activez SwagEx.</li>
             <li>Dans le Wi-Fi de l’iPhone, configurez le proxy manuel avec l’adresse et le port affichés.</li>
-            <li>Ouvrez le jeu et connectez-vous. L’export démarre automatiquement.</li>
+            <li>Validez la configuration ici. Vous pourrez ensuite exporter à tout moment avec un clic.</li>
           </ol>
         </div>
 
@@ -55,7 +56,16 @@
           <code id="certificate-url">—</code>
           <button class="secondary-button" id="copy-link" type="button">Copier le lien</button>
         </div>
-        <button class="text-button" id="cancel-action" type="button">Arrêter</button>
+        <button class="primary-button" id="complete-setup" type="button">J’ai terminé la configuration</button>
+        <button class="text-button" id="cancel-setup" type="button">Arrêter</button>
+      </section>
+
+      <section class="card capture-card" id="capture-card" aria-labelledby="capture-title" hidden>
+        <p class="eyebrow">EXPORT EN COURS</p>
+        <h2 id="capture-title">Connectez-vous dans le jeu</h2>
+        <p class="hero-copy">Votre iPhone est déjà configuré. Ouvrez Summoners War et connectez-vous ; SwagEx récupérera le profil automatiquement.</p>
+        <span class="port-pill capture-address" id="capture-address">—</span>
+        <button class="text-button" id="cancel-capture" type="button">Arrêter</button>
       </section>
 
       <section class="card success-card" id="success-card" aria-labelledby="success-title" hidden>

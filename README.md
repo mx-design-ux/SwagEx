@@ -25,10 +25,10 @@ Le JSON de référence utilisé pour la compatibilité doit rester hors du dép�
 
 ## Flux iPhone / Mac
 
-1. SwagEx démarre un proxy local uniquement sur l’adresse Wi-Fi du Mac.
-2. L’utilisateur installe et approuve le certificat SwagEx sur son iPhone.
-3. L’utilisateur configure le proxy Wi-Fi de l’iPhone avec l’adresse et le port affichés.
-4. SwagEx capture le profil de connexion, vérifie qu’il est complet, puis écrit le JSON dans Téléchargements.
-5. Le proxy s’arrête automatiquement dès que l’export est terminé.
+Au premier lancement, **Configurer mon iPhone** démarre une étape de setup : SwagEx génère son certificat local une seule fois, affiche le lien d’installation, puis guide l’installation, l’approbation du certificat et le proxy Wi-Fi. Le bouton **J’ai terminé la configuration** enregistre ce setup.
+
+Les ouvertures suivantes affichent directement **Exporter un nouvel JSON**. Cette action réutilise le même certificat et attend une nouvelle connexion au jeu ; le proxy s’arrête automatiquement dès que le profil est exporté dans Téléchargements.
+
+Le lien **Refaire la configuration iPhone** est disponible si le téléphone ou le réseau doivent être reconfigurés. Cette action volontaire relance le setup avec le même certificat local ; le certificat n’est donc pas régénéré à chaque export, ni à chaque reprise de configuration.
 
 Le produit est communautaire et non officiel. SwagEx ne modifie pas le jeu et ne doit pas être utilisé pour automatiser des actions de jeu.
