@@ -56,6 +56,5 @@ jobs:
           releaseBody: See the assets below for the macOS installer and updater artifacts.
           releaseDraft: true
           prerelease: false
-          uploadUpdaterJson: true
-          uploadUpdaterSignatures: true
+          includeUpdaterJson: true
           args: --target ${{ matrix.target }}
