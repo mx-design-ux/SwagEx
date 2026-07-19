@@ -308,7 +308,10 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   elements.quitApp.addEventListener("click", () => {
     stopPolling();
-    void getCurrentWindow().close();
+    void getCurrentWindow().close().catch((error) => {
+      elements.errorMessage.textContent = `Impossible de fermer SwagEx : ${String(error)}`;
+      showScreen(elements.errorScreen);
+    });
   });
   elements.retryAction.addEventListener("click", () => {
     if (latestStatus?.certificateSetupCompleted) {

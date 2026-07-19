@@ -29,7 +29,7 @@ pub fn write_profile(profile: &Value, output_directory: &Path) -> anyhow::Result
         .unwrap_or_else(|| "profil".to_string());
 
     // SWEX names account exports with a tilde separator before the wizard id.
-    let display_name = format!("{wizard_name}~-{wizard_id}");
+    let display_name = format!("{}~-{wizard_id}", wizard_name.trim_end_matches('~'));
     let filename = format!("{}.json", sanitize_filename(&display_name));
     let final_path = output_directory.join(filename);
     let temporary_path = output_directory.join(format!(".swagex-{wizard_id}.tmp"));
@@ -81,5 +81,20 @@ mod tests {
         assert_eq!(exported.path.file_name().unwrap(), "A-B~-42.json");
         let reread: Value = serde_json::from_slice(&fs::read(exported.path).unwrap()).unwrap();
         assert_eq!(reread, profile);
+    }
+
+    #[test]
+    fn avoids_duplicate_tilde_separator_in_export_name() {
+        let directory = tempfile::tempdir().unwrap();
+        let profile = serde_json::json!({
+            "command": "HubUserLogin",
+            "wizard_info": { "wizard_id": 65581, "wizard_name": "Berserk~" },
+            "building_list": [],
+            "unit_list": [],
+            "runes": []
+        });
+
+        let exported = write_profile(&profile, directory.path()).unwrap();
+        assert_eq!(exported.path.file_name().unwrap(), "Berserk~-65581.json");
     }
 }

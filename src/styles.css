@@ -41,10 +41,10 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
 .proxy-done-hitbox { bottom: 32px; left: 405px; width: 199px; height: 55px; }
 
 .waiting-stop-hitbox, .json-quit-hitbox { bottom: 32px; left: 285px; width: 190px; height: 55px; }
-.json-dynamic-file { position: absolute; top: 250px; left: 381px; z-index: 3; display: flex; align-items: center; gap: 2px; width: 330px; height: 52px; padding-right: 5px; color: #FFFFFF; background: var(--charcoal); }
-.json-dynamic-file img { width: 51px; height: 51px; }
-.json-dynamic-file span { overflow: hidden; color: #FFFFFF; font-size: 24px; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
-.json-file-hitbox { top: 245px; left: 375px; width: 350px; height: 65px; }
+.json-dynamic-file { position: absolute; top: 250px; left: 370px; z-index: 3; display: block; width: 350px; height: 100px; padding: 0; color: #FFFFFF; background: var(--charcoal); }
+.json-dynamic-file img { position: absolute; top: 0; left: 0; display: block; width: 64px; height: 64px; }
+.json-dynamic-file span { position: absolute; top: 62px; left: 64px; width: 286px; overflow: hidden; color: #FFFFFF; font-size: 24px; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
+.json-file-hitbox { top: 245px; left: 365px; width: 360px; height: 110px; }
 
 .error-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
 .error-screen h1 { margin: 0; color: #f3f3f3; font-size: 25px; }
@@ -57,7 +57,7 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
 .update-card h2 { margin: 0 0 14px; color: var(--gold); font-size: 25px; line-height: 1.15; }
 .update-card p { margin: 0; color: #eee; font-size: 16px; line-height: 1.45; }
 .update-progress { margin-top: 12px !important; color: var(--cyan) !important; }
-.update-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+.update-actions { display: flex; justify-content: center; gap: 12px; margin-top: 24px; }
 .update-actions button { min-height: 42px; padding: 0 18px; border-radius: 999px; cursor: pointer; font-size: 15px; font-weight: 700; }
 .update-secondary { border: 1px solid #5e5e5e; color: #eee; background: transparent; }
 .update-primary { border: 0; color: #181818; background: var(--gold); }
