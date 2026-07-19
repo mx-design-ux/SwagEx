@@ -39,6 +39,6 @@ Le produit est communautaire et non officiel. SwagEx ne modifie pas le jeu et ne
 
 SwagEx intègre le plugin Tauri Updater. L’application vérifie discrètement les nouvelles versions au lancement et expose aussi **SwagEx → Rechercher les mises à jour…** dans le menu macOS. Les mises à jour sont téléchargées uniquement depuis le manifeste GitHub Releases configuré dans `src-tauri/tauri.conf.json`, puis vérifiées par signature avant installation.
 
-La clé privée de signature ne doit jamais être ajoutée au dépôt. Pour les publications, le workflow GitHub attend les secrets `TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Le dépôt de publication est `mx-design-ux/SwagEx`. Les artefacts macOS doivent également être signés et notarisés avant une distribution large.
+La clé privée de signature ne doit jamais être ajoutée au dépôt. Pour les publications, le workflow GitHub attend les secrets `TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Le dépôt de publication est `mx-design-ux/SwagEx`. Les artefacts macOS sont signés ad hoc (`APPLE_SIGNING_IDENTITY=-`) : aucun compte Apple payant n'est requis, mais macOS demande à chaque utilisateur une autorisation initiale dans **Réglages Système → Confidentialité et sécurité → Ouvrir quand même**.
 
 Une première installation manuelle reste nécessaire pour passer à cette version équipée de l’updater. Ensuite, une release publiée avec un tag tel que `v0.2.0` sera proposée directement aux utilisateurs déjà installés.
