@@ -89,7 +89,11 @@ mod tests {
     #[test]
     fn migrates_legacy_setup_flag() {
         let directory = tempfile::tempdir().unwrap();
-        fs::write(directory.path().join(SETTINGS_FILE), r#"{"setup_completed":true}"#).unwrap();
+        fs::write(
+            directory.path().join(SETTINGS_FILE),
+            r#"{"setup_completed":true}"#,
+        )
+        .unwrap();
         assert_eq!(
             read(directory.path()).unwrap(),
             SetupSettings {

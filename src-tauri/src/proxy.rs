@@ -258,7 +258,7 @@ fn app_data_directory(app: &AppHandle) -> anyhow::Result<PathBuf> {
 }
 
 fn configured(app: &AppHandle) -> anyhow::Result<SetupSettings> {
-    Ok(setup::read(&app_data_directory(app)?)?)
+    setup::read(&app_data_directory(app)?)
 }
 
 fn cancel_running_proxy(state: &AppState) -> anyhow::Result<()> {
@@ -289,17 +289,26 @@ async fn start_proxy(
     let app_data = app_data_directory(&app)?;
     let output_directory = app.path().download_dir()?;
     let local_ip = local_ipv4()?;
+    let settings = configured(&app)?;
+    let certificate_directory = app_data.join("certificate");
+    if !force_regenerate_certificate
+        && settings.certificate_setup_completed
+        && !certificate_directory.exists()
+    {
+        anyhow::bail!(
+            "Le certificat SwagEx installé précédemment est introuvable. Aucune nouvelle CA n’a été créée ; utilisez « Nouveau certificat ? » uniquement si vous acceptez de le réinstaller sur l’iPhone."
+        );
+    }
     let certificate = if force_regenerate_certificate {
-        regenerate_certificate(&app_data.join("certificate"))?
+        regenerate_certificate(&certificate_directory)?
     } else {
-        ensure_certificate(&app_data.join("certificate"))?
+        ensure_certificate(&certificate_directory)?
     };
     let certificate_was_created = certificate.was_created;
     let certificate_der = Arc::new(certificate.der);
     let listener = bind_listener(local_ip).await?;
     let port = listener.local_addr()?.port();
     let certificate_url = format!("http://{local_ip}:{port}/certificate");
-    let settings = configured(&app)?;
     let cancel = CancellationToken::new();
 
     let handler = CaptureHandler {
@@ -322,7 +331,9 @@ async fn start_proxy(
     let status = StatusSnapshot {
         phase: phase.into(),
         message: match phase {
-            "certificate_setup" => "Installez puis activez le certificat SwagEx sur l’iPhone.".into(),
+            "certificate_setup" => {
+                "Installez puis activez le certificat SwagEx sur l’iPhone.".into()
+            }
             "proxy_setup" => "Saisissez ces valeurs dans le proxy Wi‑Fi de l’iPhone.".into(),
             "listening" => "Ouvrez Summoners War et connectez-vous sur l’iPhone configuré.".into(),
             _ => "".into(),
@@ -384,18 +395,18 @@ pub async fn start_certificate_setup(
     start_proxy(app, &state, false, "certificate_setup", regenerate)
         .await
         .map_err(|error| {
-        let message = error.to_string();
-        let settings = state.shared.snapshot();
-        state.shared.replace(StatusSnapshot {
-            phase: "error".into(),
-            message: message.clone(),
-            ..StatusSnapshot::idle(SetupSettings {
-                certificate_setup_completed: settings.certificate_setup_completed,
-                proxy_setup_completed: settings.proxy_setup_completed,
-            })
-        });
-        message
-    })
+            let message = error.to_string();
+            let settings = state.shared.snapshot();
+            state.shared.replace(StatusSnapshot {
+                phase: "error".into(),
+                message: message.clone(),
+                ..StatusSnapshot::idle(SetupSettings {
+                    certificate_setup_completed: settings.certificate_setup_completed,
+                    proxy_setup_completed: settings.proxy_setup_completed,
+                })
+            });
+            message
+        })
 }
 
 #[tauri::command]
@@ -411,14 +422,14 @@ pub async fn start_proxy_setup(
     start_proxy(app, &state, false, "proxy_setup", false)
         .await
         .map_err(|error| {
-        let message = error.to_string();
-        state.shared.replace(StatusSnapshot {
-            phase: "error".into(),
-            message: message.clone(),
-            ..StatusSnapshot::idle(settings)
-        });
-        message
-    })
+            let message = error.to_string();
+            state.shared.replace(StatusSnapshot {
+                phase: "error".into(),
+                message: message.clone(),
+                ..StatusSnapshot::idle(settings)
+            });
+            message
+        })
 }
 
 #[tauri::command]
