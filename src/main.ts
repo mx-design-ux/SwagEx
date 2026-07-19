@@ -1,13 +1,27 @@
 import { invoke } from "@tauri-apps/api/core";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { Menu, Submenu } from "@tauri-apps/api/menu";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import * as QRCode from "qrcode";
+import "@fontsource/kalam/400.css";
+import "./styles.css";
+import logoAsset from "./assets/ui/logo-swagex.svg";
+import paperAsset from "./assets/ui/paper.svg";
+import splashAsset from "./assets/ui/SwagEx-init@2x.png";
+import certificateScreenAsset from "./assets/ui/SwagEx-iphone-setup-01@2x.png";
+import proxyScreenAsset from "./assets/ui/SwagEx-iphone-setup-02@2x.png";
+import waitingScreenAsset from "./assets/ui/SwagEx-iphone-waiting@2x.png";
+import jsonScreenAsset from "./assets/ui/SwagEx-iphone-json@2x.png";
 
-type Phase = "idle" | "setup" | "listening" | "captured" | "error";
+type Phase = "idle" | "certificate_setup" | "proxy_setup" | "listening" | "captured" | "error";
 
 type StatusSnapshot = {
   phase: Phase;
   message: string;
-  setupCompleted: boolean;
+  certificateSetupCompleted: boolean;
+  proxySetupCompleted: boolean;
   localIp?: string;
   port?: number;
   certificateUrl?: string;
@@ -17,105 +31,105 @@ type StatusSnapshot = {
 };
 
 const elements = {
-  phaseLabel: document.querySelector<HTMLElement>("#phase-label")!,
-  statusDot: document.querySelector<HTMLElement>("#status-dot")!,
-  statusMessage: document.querySelector<HTMLElement>("#status-message")!,
-  primaryAction: document.querySelector<HTMLButtonElement>("#primary-action")!,
-  setupAgain: document.querySelector<HTMLButtonElement>("#setup-again")!,
-  errorMessage: document.querySelector<HTMLElement>("#error-message")!,
-  setupCard: document.querySelector<HTMLElement>("#setup-card")!,
-  captureCard: document.querySelector<HTMLElement>("#capture-card")!,
-  successCard: document.querySelector<HTMLElement>("#success-card")!,
-  proxyAddress: document.querySelector<HTMLElement>("#proxy-address")!,
-  captureAddress: document.querySelector<HTMLElement>("#capture-address")!,
-  certificateUrl: document.querySelector<HTMLElement>("#certificate-url")!,
+  splash: document.querySelector<HTMLElement>("#splash-screen")!,
+  app: document.querySelector<HTMLElement>("#app-screen")!,
+  splashImage: document.querySelector<HTMLImageElement>("#splash-image")!,
+  brandLogo: document.querySelector<HTMLImageElement>(".brand-logo")!,
+  certificateScreen: document.querySelector<HTMLElement>("#certificate-screen")!,
+  proxyScreen: document.querySelector<HTMLElement>("#proxy-screen")!,
+  waitingScreen: document.querySelector<HTMLElement>("#waiting-screen")!,
+  jsonScreen: document.querySelector<HTMLElement>("#json-screen")!,
+  errorScreen: document.querySelector<HTMLElement>("#error-screen")!,
   certificateQr: document.querySelector<HTMLImageElement>("#certificate-qr")!,
-  copyLink: document.querySelector<HTMLButtonElement>("#copy-link")!,
-  completeSetup: document.querySelector<HTMLButtonElement>("#complete-setup")!,
-  cancelSetup: document.querySelector<HTMLButtonElement>("#cancel-setup")!,
-  cancelCapture: document.querySelector<HTMLButtonElement>("#cancel-capture")!,
+  certificateDownload: document.querySelector<HTMLButtonElement>("#certificate-download")!,
+  certificateDone: document.querySelector<HTMLButtonElement>("#certificate-done")!,
+  proxyHost: document.querySelector<HTMLElement>("#proxy-host")!,
+  proxyPort: document.querySelector<HTMLElement>("#proxy-port")!,
+  proxyDone: document.querySelector<HTMLButtonElement>("#proxy-done")!,
+  regenerateCertificate: document.querySelector<HTMLButtonElement>("#regenerate-certificate")!,
+  stopListening: document.querySelector<HTMLButtonElement>("#stop-listening")!,
   exportName: document.querySelector<HTMLElement>("#export-name")!,
   revealExport: document.querySelector<HTMLButtonElement>("#reveal-export")!,
-  newExport: document.querySelector<HTMLButtonElement>("#new-export")!,
+  quitApp: document.querySelector<HTMLButtonElement>("#quit-app")!,
+  errorMessage: document.querySelector<HTMLElement>("#error-message")!,
+  retryAction: document.querySelector<HTMLButtonElement>("#retry-action")!,
+  updateDialog: document.querySelector<HTMLElement>("#update-dialog")!,
+  updateTitle: document.querySelector<HTMLElement>("#update-title")!,
+  updateMessage: document.querySelector<HTMLElement>("#update-message")!,
+  updateProgress: document.querySelector<HTMLElement>("#update-progress")!,
+  updateDismiss: document.querySelector<HTMLButtonElement>("#update-dismiss")!,
+  updateInstall: document.querySelector<HTMLButtonElement>("#update-install")!,
 };
 
 let latestStatus: StatusSnapshot | null = null;
 let pollTimer: number | undefined;
+let actionInProgress = false;
+let availableUpdate: Update | null = null;
+let updateInProgress = false;
 
-function phaseLabel(phase: Phase): string {
-  return {
-    idle: "PRÊT",
-    setup: "CONFIGURATION IPHONE",
-    listening: "EN ATTENTE DU JEU",
-    captured: "EXPORT TERMINÉ",
-    error: "ERREUR",
-  }[phase];
+function setAssets(): void {
+  elements.splashImage.src = splashAsset;
+  elements.brandLogo.src = logoAsset;
+  document.querySelector<HTMLImageElement>("#certificate-art")!.src = certificateScreenAsset;
+  document.querySelector<HTMLImageElement>("#proxy-art")!.src = proxyScreenAsset;
+  document.querySelector<HTMLImageElement>("#waiting-art")!.src = waitingScreenAsset;
+  document.querySelector<HTMLImageElement>("#json-art")!.src = jsonScreenAsset;
+  document.querySelector<HTMLImageElement>(".json-dynamic-file img")!.src = paperAsset;
+}
+
+function showScreen(screen: HTMLElement): void {
+  [elements.certificateScreen, elements.proxyScreen, elements.waitingScreen, elements.jsonScreen, elements.errorScreen]
+    .forEach((candidate) => { candidate.hidden = candidate !== screen; });
 }
 
 function updateStatus(status: StatusSnapshot): void {
   latestStatus = status;
-  elements.phaseLabel.textContent = phaseLabel(status.phase);
-  elements.statusMessage.textContent = status.message;
-  elements.statusDot.dataset.phase = status.phase;
-  elements.errorMessage.hidden = status.phase !== "error";
-  elements.errorMessage.textContent = status.phase === "error" ? status.message : "";
 
-  const inSetup = status.phase === "setup";
-  const listening = status.phase === "listening";
-  const captured = status.phase === "captured";
-  const busy = inSetup || listening || captured;
+  if (status.phase === "certificate_setup") {
+    showScreen(elements.certificateScreen);
+  } else if (status.phase === "proxy_setup" || status.phase === "idle") {
+    showScreen(elements.proxyScreen);
+  } else if (status.phase === "listening") {
+    showScreen(elements.waitingScreen);
+  } else if (status.phase === "captured") {
+    showScreen(elements.jsonScreen);
+  } else {
+    elements.errorMessage.textContent = status.message;
+    showScreen(elements.errorScreen);
+  }
 
-  elements.setupCard.hidden = !inSetup;
-  elements.captureCard.hidden = !listening;
-  elements.successCard.hidden = !captured;
-  elements.primaryAction.hidden = busy;
-  elements.primaryAction.disabled = false;
-  elements.primaryAction.textContent = status.setupCompleted
-    ? "Exporter un JSON frais"
-    : "Configurer mon iPhone";
-  elements.setupAgain.hidden = !status.setupCompleted || busy;
+  const hasAddress = Boolean(status.localIp && status.port);
+  if (hasAddress) {
+    elements.proxyHost.textContent = status.localIp!;
+    elements.proxyPort.textContent = String(status.port!);
+  }
 
-  if (inSetup && status.localIp && status.port && status.certificateUrl) {
-    const address = `${status.localIp}:${status.port}`;
-    elements.proxyAddress.textContent = address;
-    elements.certificateUrl.textContent = status.certificateUrl;
+  if (status.phase === "certificate_setup" && status.certificateUrl) {
     void QRCode.toDataURL(status.certificateUrl, {
       margin: 1,
-      width: 180,
-      color: { dark: "#172033", light: "#ffffff" },
-    }).then((url) => {
-      elements.certificateQr.src = url;
-    });
+      width: 232,
+      errorCorrectionLevel: "M",
+      color: { dark: "#FFC156", light: "#181818" },
+    }).then((url) => { elements.certificateQr.src = url; });
   }
 
-  if (listening && status.localIp && status.port) {
-    elements.captureAddress.textContent = `${status.localIp}:${status.port}`;
+  if (status.phase === "captured") {
+    elements.exportName.textContent = status.profileName
+      ? `${status.profileName}.json`
+      : "Compte.json";
   }
 
-  if (captured) {
-    elements.exportName.textContent = status.exportPath ?? "Le fichier a été enregistré dans Téléchargements.";
-  }
+  elements.certificateDone.disabled = actionInProgress;
+  elements.proxyDone.disabled = actionInProgress;
+  elements.regenerateCertificate.disabled = actionInProgress;
 }
 
 async function refreshStatus(): Promise<void> {
   try {
     updateStatus(await invoke<StatusSnapshot>("export_status"));
   } catch (error) {
-    elements.errorMessage.hidden = false;
     elements.errorMessage.textContent = String(error);
-  }
-}
-
-async function initialize(): Promise<void> {
-  try {
-    const status = await invoke<StatusSnapshot>("export_status");
-    updateStatus(status);
-    if (!status.setupCompleted && status.phase === "idle") {
-      await startSetup();
-    }
-  } catch (error) {
-    elements.errorMessage.hidden = false;
-    elements.errorMessage.textContent = String(error);
+    showScreen(elements.errorScreen);
   }
 }
 
@@ -131,97 +145,180 @@ function stopPolling(): void {
   }
 }
 
-async function startSetup(): Promise<void> {
-  elements.primaryAction.disabled = true;
-  elements.errorMessage.hidden = true;
+function closeUpdateDialog(): void {
+  elements.updateDialog.hidden = true;
+  elements.updateProgress.hidden = true;
+  elements.updateInstall.disabled = false;
+}
+
+function showUpdateMessage(title: string, message: string, canInstall: boolean): void {
+  elements.updateTitle.textContent = title;
+  elements.updateMessage.textContent = message;
+  elements.updateProgress.hidden = true;
+  elements.updateInstall.hidden = !canInstall;
+  elements.updateDismiss.textContent = canInstall ? "Plus tard" : "Fermer";
+  elements.updateDialog.hidden = false;
+}
+
+async function installAvailableUpdate(): Promise<void> {
+  if (!availableUpdate || updateInProgress) return;
+  updateInProgress = true;
+  elements.updateInstall.disabled = true;
+  elements.updateDismiss.disabled = true;
+  elements.updateProgress.hidden = false;
+  elements.updateProgress.textContent = "Téléchargement…";
+
   try {
-    updateStatus(await invoke<StatusSnapshot>("start_setup"));
+    let downloaded = 0;
+    let contentLength = 0;
+    await availableUpdate.downloadAndInstall((event) => {
+      if (event.event === "Started") {
+        contentLength = event.data.contentLength ?? 0;
+      } else if (event.event === "Progress") {
+        downloaded += event.data.chunkLength;
+        if (contentLength > 0) {
+          elements.updateProgress.textContent = `Téléchargement… ${Math.round((downloaded / contentLength) * 100)} %`;
+        }
+      } else if (event.event === "Finished") {
+        elements.updateProgress.textContent = "Installation…";
+      }
+    });
+    await relaunch();
+  } catch (error) {
+    updateInProgress = false;
+    elements.updateDismiss.disabled = false;
+    elements.updateInstall.disabled = false;
+    elements.updateProgress.textContent = `La mise à jour a échoué : ${String(error)}`;
+  }
+}
+
+async function checkForUpdates(manual: boolean): Promise<void> {
+  if (updateInProgress) return;
+  try {
+    const update = await check({ timeout: 5000 });
+    if (!update) {
+      if (manual) {
+        showUpdateMessage("SwagEx est à jour", "Vous utilisez déjà la dernière version disponible.", false);
+      }
+      return;
+    }
+
+    availableUpdate = update;
+    const notes = update.body?.trim();
+    showUpdateMessage(
+      `SwagEx ${update.version} est disponible`,
+      notes ? `Notes de version : ${notes}` : "Une nouvelle version est prête à être installée.",
+      true,
+    );
+  } catch (error) {
+    if (manual) {
+      showUpdateMessage("Mise à jour indisponible", `Impossible de vérifier les mises à jour : ${String(error)}`, false);
+    }
+  }
+}
+
+async function installAppMenu(): Promise<void> {
+  try {
+    const updates = updateMenuItem();
+    const appSubmenu = await Submenu.new({ text: "SwagEx", items: [updates] });
+    const menu = await Menu.new({ items: [appSubmenu] });
+    await menu.setAsAppMenu();
+  } catch {
+    // The native menu is optional in browser development and older runtimes.
+  }
+}
+
+function updateMenuItem() {
+  return {
+    id: "check-for-updates",
+    text: "Rechercher les mises à jour…",
+    action: () => { void checkForUpdates(true); },
+  } as const;
+}
+
+async function runAction(command: string, args?: Record<string, unknown>): Promise<void> {
+  if (actionInProgress) return;
+  actionInProgress = true;
+  let succeeded = false;
+  updateStatus(latestStatus ?? {
+    phase: "error",
+    message: "Action en cours…",
+    certificateSetupCompleted: false,
+    proxySetupCompleted: false,
+    certificateWasCreated: false,
+  });
+  try {
+    updateStatus(await invoke<StatusSnapshot>(command, args));
+    succeeded = true;
+  } catch (error) {
+    elements.errorMessage.textContent = String(error);
+    showScreen(elements.errorScreen);
+  } finally {
+    actionInProgress = false;
+    if (succeeded && latestStatus) updateStatus(latestStatus);
+  }
+}
+
+async function initialize(): Promise<void> {
+  const splashStartedAt = performance.now();
+  setAssets();
+  try {
+    const status = await invoke<StatusSnapshot>("export_status");
+    if (status.certificateSetupCompleted) {
+      updateStatus(await invoke<StatusSnapshot>("start_proxy_setup"));
+    } else {
+      updateStatus(await invoke<StatusSnapshot>("start_certificate_setup", { regenerate: false }));
+    }
+    const remainingSplashTime = Math.max(0, 5000 - (performance.now() - splashStartedAt));
+    await new Promise((resolve) => window.setTimeout(resolve, remainingSplashTime));
+    elements.splash.hidden = true;
+    elements.app.hidden = false;
     beginPolling();
+    window.setTimeout(() => { void checkForUpdates(false); }, 1200);
   } catch (error) {
-    updateStatus({
-      phase: "error",
-      message: String(error),
-      setupCompleted: false,
-      certificateWasCreated: false,
-    });
+    const remainingSplashTime = Math.max(0, 5000 - (performance.now() - splashStartedAt));
+    await new Promise((resolve) => window.setTimeout(resolve, remainingSplashTime));
+    elements.splash.hidden = true;
+    elements.app.hidden = false;
+    elements.errorMessage.textContent = String(error);
+    showScreen(elements.errorScreen);
   }
-}
-
-async function startExport(): Promise<void> {
-  elements.primaryAction.disabled = true;
-  elements.errorMessage.hidden = true;
-  try {
-    updateStatus(await invoke<StatusSnapshot>("start_export"));
-    beginPolling();
-  } catch (error) {
-    updateStatus({
-      phase: "error",
-      message: String(error),
-      setupCompleted: latestStatus?.setupCompleted ?? false,
-      certificateWasCreated: false,
-    });
-  }
-}
-
-async function completeSetup(): Promise<void> {
-  try {
-    updateStatus(await invoke<StatusSnapshot>("complete_setup"));
-    stopPolling();
-  } catch (error) {
-    updateStatus({
-      phase: "error",
-      message: String(error),
-      setupCompleted: false,
-      certificateWasCreated: false,
-    });
-  }
-}
-
-async function resetSetup(): Promise<void> {
-  try {
-    updateStatus(await invoke<StatusSnapshot>("reset_setup"));
-    await startSetup();
-  } catch (error) {
-    updateStatus({
-      phase: "error",
-      message: String(error),
-      setupCompleted: false,
-      certificateWasCreated: false,
-    });
-  }
-}
-
-async function cancelExport(): Promise<void> {
-  updateStatus(await invoke<StatusSnapshot>("cancel_export"));
-  stopPolling();
-}
-
-async function copyLink(): Promise<void> {
-  if (!latestStatus?.certificateUrl) return;
-  await navigator.clipboard.writeText(latestStatus.certificateUrl);
-  const original = elements.copyLink.textContent;
-  elements.copyLink.textContent = "Lien copié";
-  window.setTimeout(() => {
-    elements.copyLink.textContent = original;
-  }, 1400);
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  elements.primaryAction.addEventListener("click", () => {
-    if (latestStatus?.setupCompleted) {
-      void startExport();
-    } else {
-      void startSetup();
-    }
+  elements.certificateDone.addEventListener("click", () => {
+    void runAction("complete_certificate_setup");
   });
-  elements.setupAgain.addEventListener("click", () => void resetSetup());
-  elements.completeSetup.addEventListener("click", () => void completeSetup());
-  elements.cancelSetup.addEventListener("click", () => void cancelExport());
-  elements.cancelCapture.addEventListener("click", () => void cancelExport());
-  elements.copyLink.addEventListener("click", () => void copyLink());
-  elements.newExport.addEventListener("click", () => void startExport());
+  elements.proxyDone.addEventListener("click", () => {
+    // The iPhone forgets its manual proxy after each use, so this action is
+    // deliberately identical on every run and immediately starts capture.
+    void runAction("complete_proxy_setup");
+  });
+  elements.regenerateCertificate.addEventListener("click", () => {
+    void runAction("start_certificate_setup", { regenerate: true });
+  });
+  elements.stopListening.addEventListener("click", () => {
+    void runAction("cancel_export");
+  });
+  elements.certificateDownload.addEventListener("click", () => {
+    if (latestStatus?.certificateUrl) void openUrl(latestStatus.certificateUrl);
+  });
   elements.revealExport.addEventListener("click", () => {
     if (latestStatus?.exportPath) void revealItemInDir(latestStatus.exportPath);
   });
+  elements.quitApp.addEventListener("click", () => {
+    stopPolling();
+    void getCurrentWindow().close();
+  });
+  elements.retryAction.addEventListener("click", () => {
+    if (latestStatus?.certificateSetupCompleted) {
+      void runAction("start_proxy_setup");
+    } else {
+      void runAction("start_certificate_setup", { regenerate: false });
+    }
+  });
+  elements.updateDismiss.addEventListener("click", closeUpdateDialog);
+  elements.updateInstall.addEventListener("click", () => { void installAvailableUpdate(); });
+  void installAppMenu();
   void initialize();
 });

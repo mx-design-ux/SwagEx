@@ -61,6 +61,13 @@ pub fn ensure_certificate(directory: &Path) -> anyhow::Result<CertificateMateria
     })
 }
 
+pub fn regenerate_certificate(directory: &Path) -> anyhow::Result<CertificateMaterial> {
+    if directory.exists() {
+        fs::remove_dir_all(directory)?;
+    }
+    ensure_certificate(directory)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

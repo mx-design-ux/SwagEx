@@ -16,8 +16,9 @@
         "title": "SwagEx",
         "width": 760,
         "height": 720,
-        "minWidth": 620,
-        "minHeight": 620
+        "minWidth": 680,
+        "minHeight": 680,
+        "resizable": false
       }
     ],
     "security": {
@@ -26,6 +27,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",
@@ -34,5 +36,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgwQzI0RTg2MEY5NkVFQ0QKUldUTjdwWVBoazdDZ0dXTng1VGlTNk9vQ3BjSXVXcU5ibUoycllWRHZJSTFERkxCck5DdFRHVXkK",
+      "endpoints": [
+        "https://github.com/mx-design-ux/SwagEx/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

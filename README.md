@@ -25,10 +25,20 @@ Le JSON de référence utilisé pour la compatibilité doit rester hors du dép�
 
 ## Flux iPhone / Mac
 
-Au premier lancement, **Configurer mon iPhone** démarre une étape de setup : SwagEx génère son certificat local une seule fois, affiche le lien d’installation, puis guide l’installation, l’approbation du certificat et le proxy Wi-Fi. Le bouton **J’ai terminé la configuration** enregistre ce setup.
+Au premier lancement, SwagEx démarre l’étape **Certificat de l’iPhone** : le certificat local est généré une seule fois, puis l’application guide l’installation et l’activation sur l’iPhone. L’écran **Proxy Wi-Fi de l’iPhone** affiche ensuite les valeurs à saisir.
 
-Les ouvertures suivantes affichent directement **Exporter un nouvel JSON**. Cette action réutilise le même certificat et attend une nouvelle connexion au jeu ; le proxy s’arrête automatiquement dès que le profil est exporté dans Téléchargements.
+Cet écran proxy est affiché à chaque ouverture et à chaque export, car l’iPhone ne conserve pas la configuration manuelle du proxy. Le bouton **J’ai configuré le proxy** démarre immédiatement l’écoute ; l’utilisateur peut alors lancer Summoners War. Le certificat reste mémorisé et n’est pas régénéré à chaque export.
 
-Le lien **Refaire la configuration iPhone** est disponible si le téléphone ou le réseau doivent être reconfigurés. Cette action volontaire relance le setup avec le même certificat local ; le certificat n’est donc pas régénéré à chaque export, ni à chaque reprise de configuration.
+Le lien **Nouveau certificat ?** est disponible depuis l’écran proxy. Il relance volontairement l’installation du certificat et doit être utilisé si le certificat a été supprimé ou si l’iPhone n’accorde plus sa confiance à l’ancien certificat.
+
+Après capture, le nom du fichier JSON et son icône sont cliquables pour afficher le dossier correspondant dans le Finder, puis **Quitter SwagEx** ferme l’application.
 
 Le produit est communautaire et non officiel. SwagEx ne modifie pas le jeu et ne doit pas être utilisé pour automatiser des actions de jeu.
+
+## Mises à jour
+
+SwagEx intègre le plugin Tauri Updater. L’application vérifie discrètement les nouvelles versions au lancement et expose aussi **SwagEx → Rechercher les mises à jour…** dans le menu macOS. Les mises à jour sont téléchargées uniquement depuis le manifeste GitHub Releases configuré dans `src-tauri/tauri.conf.json`, puis vérifiées par signature avant installation.
+
+La clé privée de signature ne doit jamais être ajoutée au dépôt. Pour les publications, le workflow GitHub attend les secrets `TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Le dépôt de publication est `mx-design-ux/SwagEx`. Les artefacts macOS doivent également être signés et notarisés avant une distribution large.
+
+Une première installation manuelle reste nécessaire pour passer à cette version équipée de l’updater. Ensuite, une release publiée avec un tag tel que `v0.2.0` sera proposée directement aux utilisateurs déjà installés.

@@ -1,5 +1,5 @@
 use crate::{
-    certificate::ensure_certificate,
+    certificate::{ensure_certificate, regenerate_certificate},
     export::write_profile,
     protocol::decode_profile,
     setup::{self, SetupSettings},
@@ -31,7 +31,8 @@ const PROFILE_PATH: &str = "/api/gateway_c2.php";
 pub struct StatusSnapshot {
     pub phase: String,
     pub message: String,
-    pub setup_completed: bool,
+    pub certificate_setup_completed: bool,
+    pub proxy_setup_completed: bool,
     pub local_ip: Option<String>,
     pub port: Option<u16>,
     pub certificate_url: Option<String>,
@@ -41,15 +42,12 @@ pub struct StatusSnapshot {
 }
 
 impl StatusSnapshot {
-    fn idle(setup_completed: bool) -> Self {
+    fn idle(settings: SetupSettings) -> Self {
         Self {
             phase: "idle".into(),
-            message: if setup_completed {
-                "Votre iPhone est configuré. Vous pouvez exporter un JSON frais.".into()
-            } else {
-                "Configurez votre iPhone pour commencer.".into()
-            },
-            setup_completed,
+            message: "Préparez le proxy Wi‑Fi de l’iPhone pour commencer.".into(),
+            certificate_setup_completed: settings.certificate_setup_completed,
+            proxy_setup_completed: settings.proxy_setup_completed,
             local_ip: None,
             port: None,
             certificate_url: None,
@@ -99,7 +97,7 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             shared: Arc::new(SharedState {
-                status: Mutex::new(StatusSnapshot::idle(false)),
+                status: Mutex::new(StatusSnapshot::idle(SetupSettings::default())),
             }),
             cancel: Mutex::new(None),
         }
@@ -259,8 +257,8 @@ fn app_data_directory(app: &AppHandle) -> anyhow::Result<PathBuf> {
     Ok(app.path().app_data_dir()?)
 }
 
-fn configured(app: &AppHandle) -> anyhow::Result<bool> {
-    Ok(setup::read(&app_data_directory(app)?)?.setup_completed)
+fn configured(app: &AppHandle) -> anyhow::Result<SetupSettings> {
+    Ok(setup::read(&app_data_directory(app)?)?)
 }
 
 fn cancel_running_proxy(state: &AppState) -> anyhow::Result<()> {
@@ -279,19 +277,29 @@ async fn start_proxy(
     app: AppHandle,
     state: &AppState,
     capture_enabled: bool,
+    phase: &str,
+    force_regenerate_certificate: bool,
 ) -> anyhow::Result<StatusSnapshot> {
     cancel_running_proxy(state)?;
+    // Let the previous listener release port 8080 before binding the next
+    // setup/capture phase. This matters when moving from certificate setup to
+    // proxy setup in the same button action.
+    tokio::time::sleep(std::time::Duration::from_millis(80)).await;
 
     let app_data = app_data_directory(&app)?;
     let output_directory = app.path().download_dir()?;
     let local_ip = local_ipv4()?;
-    let certificate = ensure_certificate(&app_data.join("certificate"))?;
+    let certificate = if force_regenerate_certificate {
+        regenerate_certificate(&app_data.join("certificate"))?
+    } else {
+        ensure_certificate(&app_data.join("certificate"))?
+    };
     let certificate_was_created = certificate.was_created;
     let certificate_der = Arc::new(certificate.der);
     let listener = bind_listener(local_ip).await?;
     let port = listener.local_addr()?.port();
     let certificate_url = format!("http://{local_ip}:{port}/certificate");
-    let setup_completed = configured(&app)?;
+    let settings = configured(&app)?;
     let cancel = CancellationToken::new();
 
     let handler = CaptureHandler {
@@ -312,18 +320,15 @@ async fn start_proxy(
         .build()?;
 
     let status = StatusSnapshot {
-        phase: if capture_enabled {
-            "listening"
-        } else {
-            "setup"
-        }
-        .into(),
-        message: if capture_enabled {
-            "Ouvrez Summoners War et connectez-vous sur l’iPhone configuré.".into()
-        } else {
-            "Suivez les étapes ci-dessous, puis validez la configuration.".into()
+        phase: phase.into(),
+        message: match phase {
+            "certificate_setup" => "Installez puis activez le certificat SwagEx sur l’iPhone.".into(),
+            "proxy_setup" => "Saisissez ces valeurs dans le proxy Wi‑Fi de l’iPhone.".into(),
+            "listening" => "Ouvrez Summoners War et connectez-vous sur l’iPhone configuré.".into(),
+            _ => "".into(),
         },
-        setup_completed,
+        certificate_setup_completed: settings.certificate_setup_completed,
+        proxy_setup_completed: settings.proxy_setup_completed,
         local_ip: Some(local_ip.to_string()),
         port: Some(port),
         certificate_url: Some(certificate_url),
@@ -349,69 +354,132 @@ async fn start_proxy(
 
 #[tauri::command]
 pub fn export_status(app: AppHandle, state: State<'_, AppState>) -> Result<StatusSnapshot, String> {
-    let setup_completed = configured(&app).map_err(|error| error.to_string())?;
+    let settings = configured(&app).map_err(|error| error.to_string())?;
     let mut status = state.shared.snapshot();
-    status.setup_completed = setup_completed;
+    status.certificate_setup_completed = settings.certificate_setup_completed;
+    status.proxy_setup_completed = settings.proxy_setup_completed;
     if status.phase == "idle" {
-        status.message = StatusSnapshot::idle(setup_completed).message;
+        status.message = StatusSnapshot::idle(settings).message;
     }
     Ok(status)
 }
 
 #[tauri::command]
-pub async fn start_setup(
+pub async fn start_certificate_setup(
     app: AppHandle,
     state: State<'_, AppState>,
+    regenerate: bool,
 ) -> Result<StatusSnapshot, String> {
-    start_proxy(app, &state, false).await.map_err(|error| {
+    if regenerate {
+        let app_data = app_data_directory(&app).map_err(|error| error.to_string())?;
+        setup::write(
+            &app_data,
+            SetupSettings {
+                certificate_setup_completed: false,
+                proxy_setup_completed: false,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    start_proxy(app, &state, false, "certificate_setup", regenerate)
+        .await
+        .map_err(|error| {
         let message = error.to_string();
-        let setup_completed = state.shared.snapshot().setup_completed;
+        let settings = state.shared.snapshot();
         state.shared.replace(StatusSnapshot {
             phase: "error".into(),
             message: message.clone(),
-            ..StatusSnapshot::idle(setup_completed)
+            ..StatusSnapshot::idle(SetupSettings {
+                certificate_setup_completed: settings.certificate_setup_completed,
+                proxy_setup_completed: settings.proxy_setup_completed,
+            })
         });
         message
     })
 }
 
 #[tauri::command]
-pub async fn start_export(
+pub async fn start_proxy_setup(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<StatusSnapshot, String> {
-    if !configured(&app).map_err(|error| error.to_string())? {
-        return Err("Configurez d’abord l’iPhone dans SwagEx.".into());
+    let settings = configured(&app).map_err(|error| error.to_string())?;
+    if !settings.certificate_setup_completed {
+        return Err("Installez d’abord le certificat SwagEx sur l’iPhone.".into());
     }
 
-    start_proxy(app, &state, true).await.map_err(|error| {
+    start_proxy(app, &state, false, "proxy_setup", false)
+        .await
+        .map_err(|error| {
         let message = error.to_string();
         state.shared.replace(StatusSnapshot {
             phase: "error".into(),
             message: message.clone(),
-            ..StatusSnapshot::idle(true)
+            ..StatusSnapshot::idle(settings)
         });
         message
     })
 }
 
 #[tauri::command]
-pub fn complete_setup(
+pub async fn complete_certificate_setup(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StatusSnapshot, String> {
+    let app_data = app_data_directory(&app).map_err(|error| error.to_string())?;
+    let current = setup::read(&app_data).map_err(|error| error.to_string())?;
+    setup::write(
+        &app_data,
+        SetupSettings {
+            certificate_setup_completed: true,
+            proxy_setup_completed: current.proxy_setup_completed,
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    start_proxy(app, &state, false, "proxy_setup", false)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn complete_proxy_setup(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StatusSnapshot, String> {
+    let app_data = app_data_directory(&app).map_err(|error| error.to_string())?;
+    let current = setup::read(&app_data).map_err(|error| error.to_string())?;
+    if !current.certificate_setup_completed {
+        return Err("Installez d’abord le certificat SwagEx sur l’iPhone.".into());
+    }
+    setup::write(
+        &app_data,
+        SetupSettings {
+            certificate_setup_completed: true,
+            proxy_setup_completed: true,
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    start_proxy(app, &state, true, "listening", false)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn cancel_export(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<StatusSnapshot, String> {
     cancel_running_proxy(&state).map_err(|error| error.to_string())?;
-    let app_data = app_data_directory(&app).map_err(|error| error.to_string())?;
-    setup::write(
-        &app_data,
-        SetupSettings {
-            setup_completed: true,
-        },
-    )
-    .map_err(|error| error.to_string())?;
-    let status = StatusSnapshot::idle(true);
-    state.shared.replace(status.clone());
-    Ok(status)
+    let settings = configured(&app).map_err(|error| error.to_string())?;
+    if settings.certificate_setup_completed {
+        start_proxy(app, &state, false, "proxy_setup", false)
+            .await
+            .map_err(|error| error.to_string())
+    } else {
+        let status = StatusSnapshot::idle(settings);
+        state.shared.replace(status.clone());
+        Ok(status)
+    }
 }
 
 #[tauri::command]
@@ -419,16 +487,7 @@ pub fn reset_setup(app: AppHandle, state: State<'_, AppState>) -> Result<StatusS
     cancel_running_proxy(&state).map_err(|error| error.to_string())?;
     let app_data = app_data_directory(&app).map_err(|error| error.to_string())?;
     setup::reset(&app_data).map_err(|error| error.to_string())?;
-    let status = StatusSnapshot::idle(false);
-    state.shared.replace(status.clone());
-    Ok(status)
-}
-
-#[tauri::command]
-pub fn cancel_export(app: AppHandle, state: State<'_, AppState>) -> Result<StatusSnapshot, String> {
-    cancel_running_proxy(&state).map_err(|error| error.to_string())?;
-    let setup_completed = configured(&app).map_err(|error| error.to_string())?;
-    let status = StatusSnapshot::idle(setup_completed);
+    let status = StatusSnapshot::idle(SetupSettings::default());
     state.shared.replace(status.clone());
     Ok(status)
 }

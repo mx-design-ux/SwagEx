@@ -7,9 +7,20 @@ use std::{
 
 const SETTINGS_FILE: &str = "settings.json";
 
-#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct SetupSettings {
-    pub setup_completed: bool,
+    pub certificate_setup_completed: bool,
+    pub proxy_setup_completed: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+struct StoredSettings {
+    #[serde(default)]
+    certificate_setup_completed: bool,
+    #[serde(default)]
+    proxy_setup_completed: bool,
+    #[serde(default)]
+    setup_completed: bool,
 }
 
 fn settings_path(app_data_directory: &Path) -> PathBuf {
@@ -23,7 +34,15 @@ pub fn read(app_data_directory: &Path) -> anyhow::Result<SetupSettings> {
     }
 
     let contents = fs::read(&path).with_context(|| format!("lecture de {}", path.display()))?;
-    Ok(serde_json::from_slice(&contents).unwrap_or_default())
+    let stored: StoredSettings = serde_json::from_slice(&contents).unwrap_or_default();
+
+    // Migrate the original single flag used by the prototype. A user who had
+    // already completed the old setup should not be asked to repeat it.
+    let legacy_completed = stored.setup_completed;
+    Ok(SetupSettings {
+        certificate_setup_completed: stored.certificate_setup_completed || legacy_completed,
+        proxy_setup_completed: stored.proxy_setup_completed || legacy_completed,
+    })
 }
 
 pub fn write(app_data_directory: &Path, settings: SetupSettings) -> anyhow::Result<()> {
@@ -50,13 +69,33 @@ mod tests {
         write(
             directory.path(),
             SetupSettings {
-                setup_completed: true,
+                certificate_setup_completed: true,
+                proxy_setup_completed: true,
             },
         )
         .unwrap();
-        assert!(read(directory.path()).unwrap().setup_completed);
+        assert_eq!(
+            read(directory.path()).unwrap(),
+            SetupSettings {
+                certificate_setup_completed: true,
+                proxy_setup_completed: true,
+            }
+        );
 
         reset(directory.path()).unwrap();
-        assert!(!read(directory.path()).unwrap().setup_completed);
+        assert_eq!(read(directory.path()).unwrap(), SetupSettings::default());
+    }
+
+    #[test]
+    fn migrates_legacy_setup_flag() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(directory.path().join(SETTINGS_FILE), r#"{"setup_completed":true}"#).unwrap();
+        assert_eq!(
+            read(directory.path()).unwrap(),
+            SetupSettings {
+                certificate_setup_completed: true,
+                proxy_setup_completed: true,
+            }
+        );
     }
 }

@@ -28,7 +28,8 @@ pub fn write_profile(profile: &Value, output_directory: &Path) -> anyhow::Result
         .map(|id| id.to_string())
         .unwrap_or_else(|| "profil".to_string());
 
-    let display_name = format!("{wizard_name}-{wizard_id}");
+    // SWEX names account exports with a tilde separator before the wizard id.
+    let display_name = format!("{wizard_name}~-{wizard_id}");
     let filename = format!("{}.json", sanitize_filename(&display_name));
     let final_path = output_directory.join(filename);
     let temporary_path = output_directory.join(format!(".swagex-{wizard_id}.tmp"));
@@ -77,7 +78,7 @@ mod tests {
         });
 
         let exported = write_profile(&profile, directory.path()).unwrap();
-        assert_eq!(exported.path.file_name().unwrap(), "A-B-42.json");
+        assert_eq!(exported.path.file_name().unwrap(), "A-B~-42.json");
         let reread: Value = serde_json::from_slice(&fs::read(exported.path).unwrap()).unwrap();
         assert_eq!(reread, profile);
     }
