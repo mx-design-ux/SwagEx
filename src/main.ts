@@ -8,7 +8,6 @@ import * as QRCode from "qrcode";
 import "@fontsource/kalam/400.css";
 import "./styles.css";
 import logoAsset from "./assets/ui/logo-swagex.svg";
-import paperAsset from "./assets/ui/paper.svg";
 import splashAsset from "./assets/ui/SwagEx-init@2x.png";
 import certificateScreenAsset from "./assets/ui/SwagEx-iphone-setup-01@2x.png";
 import proxyScreenAsset from "./assets/ui/SwagEx-iphone-setup-02@2x.png";
@@ -74,7 +73,6 @@ function setAssets(): void {
   document.querySelector<HTMLImageElement>("#proxy-art")!.src = proxyScreenAsset;
   document.querySelector<HTMLImageElement>("#waiting-art")!.src = waitingScreenAsset;
   document.querySelector<HTMLImageElement>("#json-art")!.src = jsonScreenAsset;
-  document.querySelector<HTMLImageElement>(".json-dynamic-file img")!.src = paperAsset;
 }
 
 function showScreen(screen: HTMLElement): void {
