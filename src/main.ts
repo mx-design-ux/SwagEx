@@ -7,12 +7,6 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import * as QRCode from "qrcode";
 import "@fontsource/kalam/400.css";
 import "./styles.css";
-import logoAsset from "./assets/ui/logo-swagex.svg";
-import splashAsset from "./assets/ui/SwagEx-init@2x.png";
-import certificateScreenAsset from "./assets/ui/SwagEx-iphone-setup-01@2x.png";
-import proxyScreenAsset from "./assets/ui/SwagEx-iphone-setup-02@2x.png";
-import waitingScreenAsset from "./assets/ui/SwagEx-iphone-waiting@2x.png";
-import jsonScreenAsset from "./assets/ui/SwagEx-iphone-json@2x.png";
 
 type Phase = "idle" | "certificate_setup" | "proxy_setup" | "listening" | "captured" | "error";
 
@@ -32,8 +26,6 @@ type StatusSnapshot = {
 const elements = {
   splash: document.querySelector<HTMLElement>("#splash-screen")!,
   app: document.querySelector<HTMLElement>("#app-screen")!,
-  splashImage: document.querySelector<HTMLImageElement>("#splash-image")!,
-  brandLogo: document.querySelector<HTMLImageElement>(".brand-logo")!,
   certificateScreen: document.querySelector<HTMLElement>("#certificate-screen")!,
   proxyScreen: document.querySelector<HTMLElement>("#proxy-screen")!,
   waitingScreen: document.querySelector<HTMLElement>("#waiting-screen")!,
@@ -65,15 +57,6 @@ let pollTimer: number | undefined;
 let actionInProgress = false;
 let availableUpdate: Update | null = null;
 let updateInProgress = false;
-
-function setAssets(): void {
-  elements.splashImage.src = splashAsset;
-  elements.brandLogo.src = logoAsset;
-  document.querySelector<HTMLImageElement>("#certificate-art")!.src = certificateScreenAsset;
-  document.querySelector<HTMLImageElement>("#proxy-art")!.src = proxyScreenAsset;
-  document.querySelector<HTMLImageElement>("#waiting-art")!.src = waitingScreenAsset;
-  document.querySelector<HTMLImageElement>("#json-art")!.src = jsonScreenAsset;
-}
 
 function showScreen(screen: HTMLElement): void {
   [elements.certificateScreen, elements.proxyScreen, elements.waitingScreen, elements.jsonScreen, elements.errorScreen]
@@ -259,7 +242,6 @@ async function runAction(command: string, args?: Record<string, unknown>): Promi
 
 async function initialize(): Promise<void> {
   const splashStartedAt = performance.now();
-  setAssets();
   try {
     const status = await invoke<StatusSnapshot>("export_status");
     if (status.certificateSetupCompleted) {
