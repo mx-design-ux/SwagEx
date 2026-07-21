@@ -285,7 +285,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   elements.revealExport.addEventListener("click", () => {
     if (!latestStatus?.exportPath) return;
-    void invoke("open_export_directory", { path: latestStatus.exportPath }).catch((error) => {
+    void invoke("reveal_export_in_finder", { path: latestStatus.exportPath }).catch((error) => {
       elements.errorMessage.textContent = `Impossible d’ouvrir le dossier du JSON : ${String(error)}`;
       showScreen(elements.errorScreen);
     });
