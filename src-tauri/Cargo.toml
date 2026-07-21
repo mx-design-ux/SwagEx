@@ -1,6 +1,6 @@
 [package]
 name = "swagex"
-version = "0.1.8"
+version = "0.1.9"
 description = "Export local d'un profil de compte en JSON"
 authors = ["SwagEx contributors"]
 edition = "2024"
