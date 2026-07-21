@@ -25,6 +25,7 @@ use tokio_util::sync::CancellationToken;
 
 const PREFERRED_PROXY_PORT: u16 = 8080;
 const PROFILE_PATH: &str = "/api/gateway_c2.php";
+const CERTIFICATE_PROFILE_PATH: &str = "/SwagEx.mobileconfig";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -128,10 +129,6 @@ impl CaptureHandler {
         Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "application/x-apple-aspen-config")
-            .header(
-                header::CONTENT_DISPOSITION,
-                "attachment; filename=SwagEx.mobileconfig",
-            )
             .header(header::CACHE_CONTROL, "no-store")
             .body(Body::from(self.certificate_profile.as_ref().clone()))
             .expect("valid certificate profile response")
@@ -157,7 +154,12 @@ impl HttpHandler for CaptureHandler {
         _context: &HttpContext,
         request: Request<Body>,
     ) -> RequestOrResponse {
-        if request.method() == Method::GET && request.uri().path() == "/certificate" {
+        if request.method() == Method::GET
+            && matches!(
+                request.uri().path(),
+                CERTIFICATE_PROFILE_PATH | "/certificate"
+            )
+        {
             return self.certificate_profile_response().into();
         }
         if request.method() == Method::GET && request.uri().path() == "/SwagEx-CA.cer" {
@@ -324,7 +326,7 @@ async fn start_proxy(
     let certificate_profile = Arc::new(mobileconfig_profile(certificate_der.as_ref()));
     let listener = bind_listener(local_ip).await?;
     let port = listener.local_addr()?.port();
-    let certificate_url = format!("http://{local_ip}:{port}/certificate");
+    let certificate_url = format!("http://{local_ip}:{port}{CERTIFICATE_PROFILE_PATH}");
     let cancel = CancellationToken::new();
 
     let handler = CaptureHandler {
