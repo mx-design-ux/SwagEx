@@ -1,4 +1,5 @@
 use anyhow::{Context, bail};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use rcgen::{
     BasicConstraints, CertificateParams, DistinguishedName, DnType, IsCa, Issuer, KeyPair,
     KeyUsagePurpose,
@@ -8,6 +9,58 @@ use std::{fs, os::unix::fs::PermissionsExt, path::Path};
 const CERTIFICATE_FILE: &str = "SwagEx-CA.pem";
 const CERTIFICATE_DER_FILE: &str = "SwagEx-CA.cer";
 const PRIVATE_KEY_FILE: &str = "SwagEx-CA.key";
+
+/// Builds an iOS configuration profile containing only the public SwagEx CA.
+///
+/// A manually installed root certificate still requires explicit trust in
+/// iOS, but the mobileconfig container lets Safari hand the profile directly
+/// to Settings instead of treating it as a generic file.
+pub fn mobileconfig_profile(der: &[u8]) -> Vec<u8> {
+    let encoded_der = STANDARD.encode(der);
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>PayloadCertificateFileName</key>
+            <string>SwagEx-CA.cer</string>
+            <key>PayloadContent</key>
+            <data>{encoded_der}</data>
+            <key>PayloadDisplayName</key>
+            <string>SwagEx Local CA</string>
+            <key>PayloadIdentifier</key>
+            <string>com.swagex.local-ca</string>
+            <key>PayloadType</key>
+            <string>com.apple.security.root</string>
+            <key>PayloadUUID</key>
+            <string>3C2A4D4E-6AEF-4F8D-8FCE-3F0A4C8CB9A1</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+        </dict>
+    </array>
+    <key>PayloadDisplayName</key>
+    <string>SwagEx Local CA</string>
+    <key>PayloadIdentifier</key>
+    <string>com.swagex.profile</string>
+    <key>PayloadOrganization</key>
+    <string>SwagEx</string>
+    <key>PayloadRemovalDisallowed</key>
+    <false/>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadUUID</key>
+    <string>91D4BEF7-3DA9-4B3B-8E77-2BBA69E9CC26</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+</dict>
+</plist>
+"#,
+    )
+    .into_bytes()
+}
 
 pub struct CertificateMaterial {
     pub issuer: Issuer<'static, KeyPair>,
@@ -122,5 +175,16 @@ mod tests {
                 .contains("certificat SwagEx est incomplet")
         );
         assert!(!first.der.is_empty());
+    }
+
+    #[test]
+    fn builds_a_mobileconfig_with_only_the_public_certificate() {
+        let der = [0x30, 0x03, 0x02, 0x01, 0x00];
+        let profile = String::from_utf8(mobileconfig_profile(&der)).unwrap();
+
+        assert!(profile.contains("com.apple.security.root"));
+        assert!(profile.contains("SwagEx Local CA"));
+        assert!(profile.contains(&STANDARD.encode(der)));
+        assert!(!profile.contains("PRIVATE KEY"));
     }
 }

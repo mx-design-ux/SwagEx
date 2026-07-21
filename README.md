@@ -27,7 +27,9 @@ L’export applique le contrat d’ordre de SWEX sur une copie du profil, juste 
 
 ## Flux iPhone / Mac
 
-Au premier lancement, SwagEx démarre l’étape **Certificat de l’iPhone** : le certificat local est généré une seule fois, puis l’application guide l’installation et l’activation sur l’iPhone. L’écran **Proxy Wi-Fi de l’iPhone** affiche ensuite les valeurs à saisir.
+Au premier lancement, SwagEx démarre l’étape **Certificat de l’iPhone** : le certificat local est généré une seule fois, puis l’application guide l’installation et l’activation sur l’iPhone. Le QR code ouvre désormais un profil de configuration `.mobileconfig` contenant uniquement le certificat public ; Safari le remet directement à Réglages, sans passage par Fichiers ni partage manuel. L’écran **Proxy Wi-Fi de l’iPhone** affiche ensuite les valeurs à saisir.
+
+Après le téléchargement du profil, iOS impose encore deux actions manuelles : toucher **Installer** dans **Réglages → Profil téléchargé**, puis activer **SwagEx Local CA** dans **Réglages → Général → Informations → Réglages des certificats**. Cette confiance ne peut pas être activée automatiquement pour un certificat installé manuellement sur un iPhone non supervisé.
 
 Cet écran proxy est affiché à chaque ouverture et à chaque export, car l’iPhone ne conserve pas la configuration manuelle du proxy. Le bouton **J’ai configuré le proxy** démarre immédiatement l’écoute ; l’utilisateur peut alors lancer Summoners War. Le certificat reste mémorisé et n’est pas régénéré à chaque export.
 

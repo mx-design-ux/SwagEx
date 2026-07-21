@@ -1,5 +1,5 @@
 use crate::{
-    certificate::{ensure_certificate, regenerate_certificate},
+    certificate::{ensure_certificate, mobileconfig_profile, regenerate_certificate},
     export::write_profile,
     protocol::decode_profile,
     setup::{self, SetupSettings},
@@ -117,13 +117,27 @@ struct CaptureHandler {
     capture_enabled: bool,
     is_profile_request: bool,
     certificate_der: Arc<Vec<u8>>,
+    certificate_profile: Arc<Vec<u8>>,
     output_directory: Arc<PathBuf>,
     shared: Arc<SharedState>,
     cancel: CancellationToken,
 }
 
 impl CaptureHandler {
-    fn certificate_response(&self) -> Response<Body> {
+    fn certificate_profile_response(&self) -> Response<Body> {
+        Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/x-apple-aspen-config")
+            .header(
+                header::CONTENT_DISPOSITION,
+                "attachment; filename=SwagEx.mobileconfig",
+            )
+            .header(header::CACHE_CONTROL, "no-store")
+            .body(Body::from(self.certificate_profile.as_ref().clone()))
+            .expect("valid certificate profile response")
+    }
+
+    fn certificate_der_response(&self) -> Response<Body> {
         Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "application/x-x509-ca-cert")
@@ -143,10 +157,11 @@ impl HttpHandler for CaptureHandler {
         _context: &HttpContext,
         request: Request<Body>,
     ) -> RequestOrResponse {
-        if request.method() == Method::GET
-            && matches!(request.uri().path(), "/certificate" | "/SwagEx-CA.cer")
-        {
-            return self.certificate_response().into();
+        if request.method() == Method::GET && request.uri().path() == "/certificate" {
+            return self.certificate_profile_response().into();
+        }
+        if request.method() == Method::GET && request.uri().path() == "/SwagEx-CA.cer" {
+            return self.certificate_der_response().into();
         }
 
         self.is_profile_request = request.uri().path() == PROFILE_PATH;
@@ -306,6 +321,7 @@ async fn start_proxy(
     };
     let certificate_was_created = certificate.was_created;
     let certificate_der = Arc::new(certificate.der);
+    let certificate_profile = Arc::new(mobileconfig_profile(certificate_der.as_ref()));
     let listener = bind_listener(local_ip).await?;
     let port = listener.local_addr()?.port();
     let certificate_url = format!("http://{local_ip}:{port}/certificate");
@@ -315,6 +331,7 @@ async fn start_proxy(
         capture_enabled,
         is_profile_request: false,
         certificate_der,
+        certificate_profile,
         output_directory: Arc::new(output_directory),
         shared: Arc::clone(&state.shared),
         cancel: cancel.clone(),

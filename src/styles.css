@@ -32,6 +32,10 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
 /* The supplied screens are 1520×1440 @2x, so they render at exactly 760×720 CSS px. */
 .certificate-screen .dynamic-qr { position: absolute; top: 275px; left: 60px; z-index: 3; width: 232px; height: 232px; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .certificate-screen .dynamic-qr img { display: block; width: 232px; height: 232px; image-rendering: pixelated; }
+.certificate-guidance { position: absolute; top: 273px; left: 388px; z-index: 2; width: 350px; height: 249px; padding: 7px 0 0; color: #FFFFFF; background: var(--charcoal); font-size: 15px; line-height: 1.28; }
+.certificate-guidance-step { display: flex; flex-direction: column; }
+.certificate-guidance-step + .certificate-guidance-step { margin-top: 13px; }
+.certificate-guidance-note { display: block; margin-top: 11px; color: #969696; font-size: 12px; }
 .certificate-done-hitbox { right: 297px; bottom: 32px; left: 297px; height: 55px; }
 
 .proxy-dynamic-step { position: absolute; top: 433px; left: 387px; z-index: 3; width: 260px; height: 48px; color: #FFFFFF; background: var(--charcoal); font-size: 18px; line-height: 1.3; }

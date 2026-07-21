@@ -22,10 +22,26 @@
 
         <section class="flow-screen certificate-screen" id="certificate-screen" hidden aria-labelledby="certificate-title">
           <img class="screen-art" src="" id="certificate-art" alt="" aria-hidden="true" />
-          <button class="dynamic-qr" id="certificate-download" type="button" aria-label="Télécharger le certificat SwagEx sur ce Mac">
-            <img id="certificate-qr" alt="QR code pour télécharger le certificat SwagEx" />
+          <button class="dynamic-qr" id="certificate-download" type="button" aria-label="Ouvrir le profil SwagEx sur l’iPhone">
+            <img id="certificate-qr" alt="QR code pour télécharger le profil SwagEx sur l’iPhone" />
           </button>
-          <button class="screen-hitbox certificate-done-hitbox" id="certificate-done" type="button" aria-label="J’ai terminé"></button>
+          <div class="certificate-guidance" aria-label="Instructions d’installation du certificat">
+            <div class="certificate-guidance-step">
+              <span>Scannez ce QR code avec l’iPhone.</span>
+              <span>Le profil se télécharge dans Safari.</span>
+            </div>
+            <div class="certificate-guidance-step">
+              <span>Ouvrez Réglages &gt; Profil téléchargé.</span>
+              <span>Touchez Installer, puis confirmez.</span>
+            </div>
+            <div class="certificate-guidance-step">
+              <span>Activez SwagEx Local CA dans</span>
+              <span>Réglages &gt; Général &gt; Informations &gt;</span>
+              <span>Réglages des certificats.</span>
+            </div>
+            <span class="certificate-guidance-note">À faire une seule fois par iPhone.</span>
+          </div>
+          <button class="screen-hitbox certificate-done-hitbox" id="certificate-done" type="button" aria-label="Certificat installé et activé"></button>
           <h1 id="certificate-title" class="visually-hidden">Certificat de l’iPhone</h1>
         </section>
 
