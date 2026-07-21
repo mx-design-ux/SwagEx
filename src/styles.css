@@ -20,7 +20,13 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
 [hidden] { display: none !important; }
 
 .splash-screen, .app-screen { position: absolute; inset: 0; width: 760px; height: 720px; overflow: hidden; background: var(--charcoal); }
-.splash-image, .screen-art { display: block; width: 760px; height: 720px; object-fit: fill; }
+.splash-image, .screen-art {
+  display: block;
+  width: 760px;
+  height: 720px;
+  object-fit: fill;
+}
+.screen-art { position: absolute; inset: 0; z-index: 0; }
 
 .app-header { display: none; }
 .brand-logo { flex: 0 0 auto; width: 164px; height: 31px; object-fit: contain; }
@@ -32,38 +38,98 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
 /* The supplied screens are 1520×1440 @2x, so they render at exactly 760×720 CSS px. */
 .certificate-screen .dynamic-qr { position: absolute; top: 275px; left: 60px; z-index: 3; width: 232px; height: 232px; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .certificate-screen .dynamic-qr img { display: block; width: 232px; height: 232px; image-rendering: pixelated; }
+
+/*
+ * The supplied artwork contains the original copy. Dynamic copy must sit in
+ * a fixed, opaque column so a wording change can never expose the old artwork
+ * or move the numbered steps.
+ */
+.certificate-screen::after,
+.proxy-screen::after,
+.json-screen::after {
+  position: absolute;
+  z-index: 1;
+  content: "";
+  background: var(--charcoal);
+}
+.certificate-screen::after {
+  top: 250px;
+  left: 380px;
+  width: 360px;
+  height: 295px;
+}
+.proxy-screen::after {
+  top: 420px;
+  left: 380px;
+  width: 340px;
+  height: 75px;
+}
+.json-screen::after {
+  top: 300px;
+  left: 360px;
+  width: 370px;
+  height: 55px;
+}
+
 .certificate-guidance {
   position: absolute;
-  top: 50%;
-  left: 51%;
+  top: 260px;
+  left: 388px;
   z-index: 2;
-  display: flex;
-  width: 46%;
-  max-width: 350px;
-  height: auto;
-  min-height: 0;
-  padding: 0;
-  flex-direction: column;
-  justify-content: center;
-  gap: 13px;
+  display: grid;
+  width: 350px;
+  height: 285px;
+  min-width: 0;
+  padding: 18px 0 0;
+  grid-template-rows: 68px 68px 1fr;
+  row-gap: 14px;
+  align-content: start;
   color: #FFFFFF;
   background: var(--charcoal);
-  font-size: 15px;
-  line-height: 1.28;
+  font-size: 16px;
+  line-height: 1.36;
   text-wrap: pretty;
-  transform: translateY(-50%);
+  overflow: hidden;
 }
-.certificate-guidance-step { display: block; }
+.certificate-guidance-step {
+  min-width: 0;
+  overflow: hidden;
+}
 .certificate-done-hitbox { right: 297px; bottom: 32px; left: 297px; height: 55px; }
 
-.proxy-dynamic-step { position: absolute; top: 433px; left: 387px; z-index: 3; width: 260px; height: 48px; color: #FFFFFF; background: var(--charcoal); font-size: 18px; line-height: 1.3; }
+.proxy-dynamic-step {
+  position: absolute;
+  top: 425px;
+  left: 387px;
+  z-index: 3;
+  width: 320px;
+  height: 65px;
+  padding: 5px 0;
+  overflow: hidden;
+  color: #FFFFFF;
+  background: var(--charcoal);
+  font-size: 18px;
+  line-height: 1.3;
+}
 .proxy-dynamic-step span { display: block; }
 .proxy-dynamic-step strong { color: var(--gold); font-weight: 700; }
 .proxy-new-cert-hitbox { bottom: 32px; left: 157px; width: 233px; height: 55px; }
 .proxy-done-hitbox { bottom: 32px; left: 405px; width: 199px; height: 55px; }
 
 .waiting-stop-hitbox, .json-quit-hitbox { bottom: 32px; left: 285px; width: 190px; height: 55px; }
-.json-dynamic-file { position: absolute; top: 309px; left: 370px; z-index: 3; display: block; width: 260px; height: 30px; padding: 0; color: #FFFFFF; background: var(--charcoal); }
+.json-dynamic-file {
+  position: absolute;
+  top: 305px;
+  left: 370px;
+  z-index: 3;
+  display: block;
+  width: 340px;
+  height: 42px;
+  padding: 4px 0;
+  overflow: hidden;
+  color: #FFFFFF;
+  background: var(--charcoal);
+}
 .json-dynamic-file span { display: block; width: 100%; overflow: hidden; color: #FFFFFF; font-size: 18px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 .json-file-hitbox { top: 245px; left: 365px; width: 360px; height: 110px; }
 
