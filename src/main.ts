@@ -201,7 +201,8 @@ async function checkForUpdates(manual: boolean): Promise<void> {
 async function installAppMenu(): Promise<void> {
   try {
     const updates = updateMenuItem();
-    const appSubmenu = await Submenu.new({ text: "SwagEx", items: [updates] });
+    const quit = quitMenuItem();
+    const appSubmenu = await Submenu.new({ text: "SwagEx", items: [updates, quit] });
     const menu = await Menu.new({ items: [appSubmenu] });
     await menu.setAsAppMenu();
   } catch {
@@ -214,6 +215,23 @@ function updateMenuItem() {
     id: "check-for-updates",
     text: "Rechercher les mises à jour…",
     action: () => { void checkForUpdates(true); },
+  } as const;
+}
+
+function quitApplication(): void {
+  stopPolling();
+  void getCurrentWindow().close().catch((error) => {
+    elements.errorMessage.textContent = `Impossible de fermer SwagEx : ${String(error)}`;
+    showScreen(elements.errorScreen);
+  });
+}
+
+function quitMenuItem() {
+  return {
+    id: "quit-app",
+    text: "Quitter SwagEx",
+    accelerator: "CmdOrCtrl+Q",
+    action: quitApplication,
   } as const;
 }
 
@@ -290,13 +308,7 @@ window.addEventListener("DOMContentLoaded", () => {
       showScreen(elements.errorScreen);
     });
   });
-  elements.quitApp.addEventListener("click", () => {
-    stopPolling();
-    void getCurrentWindow().close().catch((error) => {
-      elements.errorMessage.textContent = `Impossible de fermer SwagEx : ${String(error)}`;
-      showScreen(elements.errorScreen);
-    });
-  });
+  elements.quitApp.addEventListener("click", quitApplication);
   elements.retryAction.addEventListener("click", () => {
     if (latestStatus?.certificateSetupCompleted) {
       void runAction("start_proxy_setup");

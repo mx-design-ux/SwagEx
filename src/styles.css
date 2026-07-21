@@ -186,19 +186,22 @@ button:disabled { cursor: wait; opacity: .48; }
   overflow-wrap: break-word;
 }
 .step-copy { min-width: 0; }
-.step-list li::before {
-  display: block;
+.step-number {
+  display: grid;
   box-sizing: border-box;
   width: 40px;
   height: 40px;
   border: 2px solid var(--line);
   border-radius: 50%;
   color: #777;
-  content: counter(step);
   font-size: 24px;
   font-weight: 700;
-  line-height: 36px;
-  text-align: center;
+  line-height: 1;
+  place-items: center;
+}
+.step-number::after {
+  content: counter(step);
+  transform: translateY(-1px);
 }
 .certificate-steps { row-gap: 16px; align-content: center; }
 .certificate-screen .bottom-action { min-width: 168px; }
