@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { Menu, Submenu } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import * as QRCode from "qrcode";
@@ -284,7 +284,12 @@ window.addEventListener("DOMContentLoaded", () => {
     if (latestStatus?.certificateUrl) void openUrl(latestStatus.certificateUrl);
   });
   elements.revealExport.addEventListener("click", () => {
-    if (latestStatus?.exportPath) void revealItemInDir(latestStatus.exportPath);
+    if (!latestStatus?.exportPath) return;
+
+    // Open the output directory rather than asking Finder to select the file.
+    // The result is the same user destination without an Automation request.
+    const separatorIndex = latestStatus.exportPath.lastIndexOf("/");
+    if (separatorIndex > 0) void openPath(latestStatus.exportPath.slice(0, separatorIndex));
   });
   elements.quitApp.addEventListener("click", () => {
     stopPolling();

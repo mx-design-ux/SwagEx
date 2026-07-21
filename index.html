@@ -32,9 +32,10 @@
               <img id="certificate-qr" alt="QR code pour télécharger le profil SwagEx sur l’iPhone" />
             </button>
             <ol class="step-list certificate-steps" aria-label="Instructions d’installation du certificat">
-              <li>Scannez ce QR code avec l’iPhone, puis Enregistrer dans Fichiers.</li>
-              <li>Ouvrez SwagEx.mobileconfig dans Fichiers puis choisissez votre appareil</li>
-              <li>Réglages › Profil téléchargé › Installer. Activez ensuite SwagEx dans Réglages › Général › Informations › Réglages des certificats</li>
+              <li><span class="step-copy">Scannez ce QR code avec l’iPhone, puis <strong>Enregistrer dans Fichiers</strong>.</span></li>
+              <li><span class="step-copy">Ouvrez l’app <strong>Fichiers</strong> puis <strong>SwagEx</strong> et choisissez votre appareil.</span></li>
+              <li><span class="step-copy">Réglages <span class="path-separator">›</span> Profil téléchargé <span class="path-separator">›</span> Installer</span></li>
+              <li><span class="step-copy">Réglages <span class="path-separator">›</span> Général <span class="path-separator">›</span> Informations <span class="path-separator">›</span> Réglages des certificats <span class="path-separator">›</span> Activez <strong>SwagEx</strong></span></li>
             </ol>
           </div>
           <button class="bottom-action primary-action" id="certificate-done" type="button">J’ai terminé&nbsp;!</button>
@@ -45,13 +46,10 @@
           <div class="proxy-layout">
             <img class="screen-monkey proxy-monkey" src="/src/assets/ui/asset-monkey@2x.png" alt="" aria-hidden="true" />
             <ol class="step-list proxy-steps" aria-label="Configuration du proxy Wi-Fi">
-              <li>Ouvrez Réglages › Wi‑Fi sur l’iPhone</li>
-              <li>Touchez ⓘ à côté du réseau connecté, puis Configurer le proxy › Manuel</li>
+              <li><span class="step-copy">Ouvrez Réglages <span class="path-separator">›</span> Wi‑Fi sur l’iPhone</span></li>
+              <li><span class="step-copy">Touchez ⓘ à côté du réseau connecté, puis Configurer le proxy <span class="path-separator">›</span> Manuel</span></li>
               <li class="proxy-values">
-                <span class="proxy-copy">
-                  <span>Saisissez le serveur</span>
-                  <span><strong id="proxy-host">—</strong> et le port <strong id="proxy-port">—</strong></span>
-                </span>
+                <span class="step-copy">Saisissez le serveur <strong id="proxy-host">—</strong> et le port <strong id="proxy-port">—</strong>, puis Enregistrer.</span>
               </li>
             </ol>
           </div>
@@ -64,7 +62,6 @@
         <section class="flow-screen waiting-screen" id="waiting-screen" hidden aria-labelledby="waiting-title">
           <div class="callout-layout">
             <img class="screen-monkey waiting-monkey" src="/src/assets/ui/asset-monkey@2x.png" alt="" aria-hidden="true" />
-            <p class="callout-arrow" aria-hidden="true">↗</p>
             <h1 id="waiting-title" class="callout-title">Lance le jeu,<br />j’attends…</h1>
           </div>
           <button class="bottom-action secondary-action" id="stop-listening" type="button">Arrêter l’écoute</button>
@@ -73,7 +70,6 @@
         <section class="flow-screen json-screen" id="json-screen" hidden aria-labelledby="json-title">
           <div class="export-layout">
             <img class="screen-monkey export-monkey" src="/src/assets/ui/asset-monkey@2x.png" alt="" aria-hidden="true" />
-            <p class="callout-arrow export-arrow" aria-hidden="true">↗</p>
             <button class="export-file" id="reveal-export" type="button" aria-describedby="export-name">
               <img src="/src/assets/ui/paper.svg" width="64" height="64" alt="" aria-hidden="true" />
               <span id="export-name">Compte.json</span>
