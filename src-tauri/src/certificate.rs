@@ -13,8 +13,8 @@ const PRIVATE_KEY_FILE: &str = "SwagEx-CA.key";
 /// Builds an iOS configuration profile containing only the public SwagEx CA.
 ///
 /// A manually installed root certificate still requires explicit trust in
-/// iOS, but the mobileconfig container lets Safari hand the profile directly
-/// to Settings instead of treating it as a generic file.
+/// iOS. The profile is public-only; iOS controls its download and installation
+/// flow, including the explicit confirmation screens.
 pub fn mobileconfig_profile(der: &[u8]) -> Vec<u8> {
     let encoded_der = STANDARD.encode(der);
     format!(
@@ -26,11 +26,11 @@ pub fn mobileconfig_profile(der: &[u8]) -> Vec<u8> {
     <array>
         <dict>
             <key>PayloadCertificateFileName</key>
-            <string>SwagEx-CA.cer</string>
+            <string>SwagEx.cer</string>
             <key>PayloadContent</key>
             <data>{encoded_der}</data>
             <key>PayloadDisplayName</key>
-            <string>SwagEx Local CA</string>
+            <string>SwagEx</string>
             <key>PayloadIdentifier</key>
             <string>com.swagex.local-ca</string>
             <key>PayloadType</key>
@@ -42,7 +42,7 @@ pub fn mobileconfig_profile(der: &[u8]) -> Vec<u8> {
         </dict>
     </array>
     <key>PayloadDisplayName</key>
-    <string>SwagEx Local CA</string>
+    <string>SwagEx</string>
     <key>PayloadIdentifier</key>
     <string>com.swagex.profile</string>
     <key>PayloadOrganization</key>
@@ -96,7 +96,7 @@ pub fn ensure_certificate(directory: &Path) -> anyhow::Result<CertificateMateria
     if was_created {
         let mut params = CertificateParams::new(Vec::<String>::new())?;
         let mut distinguished_name = DistinguishedName::new();
-        distinguished_name.push(DnType::CommonName, "SwagEx Local CA");
+        distinguished_name.push(DnType::CommonName, "SwagEx");
         distinguished_name.push(DnType::OrganizationName, "SwagEx");
         params.distinguished_name = distinguished_name;
         params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
@@ -183,7 +183,8 @@ mod tests {
         let profile = String::from_utf8(mobileconfig_profile(&der)).unwrap();
 
         assert!(profile.contains("com.apple.security.root"));
-        assert!(profile.contains("SwagEx Local CA"));
+        assert!(profile.contains("SwagEx"));
+        assert!(!profile.contains("SwagEx Local CA"));
         assert!(profile.contains(&STANDARD.encode(der)));
         assert!(!profile.contains("PRIVATE KEY"));
     }

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { Menu, Submenu } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { openPath, openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import * as QRCode from "qrcode";
@@ -285,11 +285,10 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   elements.revealExport.addEventListener("click", () => {
     if (!latestStatus?.exportPath) return;
-
-    // Open the output directory rather than asking Finder to select the file.
-    // The result is the same user destination without an Automation request.
-    const separatorIndex = latestStatus.exportPath.lastIndexOf("/");
-    if (separatorIndex > 0) void openPath(latestStatus.exportPath.slice(0, separatorIndex));
+    void invoke("open_export_directory", { path: latestStatus.exportPath }).catch((error) => {
+      elements.errorMessage.textContent = `Impossible d’ouvrir le dossier du JSON : ${String(error)}`;
+      showScreen(elements.errorScreen);
+    });
   });
   elements.quitApp.addEventListener("click", () => {
     stopPolling();

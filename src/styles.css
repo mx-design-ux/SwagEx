@@ -53,8 +53,8 @@ button:disabled { cursor: wait; opacity: .48; }
 }
 .splash-monkey {
   display: block;
-  width: 230px;
-  height: 310px;
+  width: 256px;
+  height: 384px;
   object-fit: contain;
   object-position: center;
 }
@@ -65,7 +65,7 @@ button:disabled { cursor: wait; opacity: .48; }
   margin-top: -18px;
 }
 .splash-brand p {
-  margin: -2px 0 0;
+  margin: 4px 0 0;
   color: var(--cyan);
   font-family: var(--kalam);
   font-size: 34px;
@@ -199,7 +199,7 @@ button:disabled { cursor: wait; opacity: .48; }
   font-weight: 700;
   line-height: 1;
   position: relative;
-  top: -1px;
+  top: -2px;
 }
 .certificate-steps { row-gap: 16px; align-content: center; }
 .certificate-screen .bottom-action { min-width: 168px; }
@@ -208,16 +208,21 @@ button:disabled { cursor: wait; opacity: .48; }
 
 .proxy-layout {
   position: absolute;
-  top: 244px;
-  right: 60px;
-  left: 110px;
+  top: 198px;
+  right: 54px;
+  bottom: 112px;
+  left: 392px;
   display: grid;
-  grid-template-columns: 210px minmax(0, 1fr);
-  column-gap: 4px;
-  align-items: start;
+  align-items: center;
 }
 .screen-monkey { display: block; object-fit: contain; object-position: center; }
-.proxy-monkey { width: 255px; height: 310px; margin-top: -28px; justify-self: center; }
+.stage-monkey {
+  position: absolute;
+  top: 198px;
+  left: 104px;
+  width: 256px;
+  height: 384px;
+}
 .proxy-steps { row-gap: 26px; }
 .proxy-steps li { font-size: 20px; line-height: 1.28; }
 .proxy-steps li::before { width: 38px; height: 38px; font-size: 24px; }
@@ -238,15 +243,13 @@ button:disabled { cursor: wait; opacity: .48; }
 .callout-layout {
   position: absolute;
   top: 198px;
-  right: 62px;
+  right: 54px;
   bottom: 112px;
-  left: 62px;
-  display: flex;
+  left: 392px;
+  display: grid;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
+  justify-items: start;
 }
-.waiting-monkey { width: 256px; height: 384px; }
 .callout-title {
   margin: 0;
   color: var(--cyan);
@@ -254,21 +257,18 @@ button:disabled { cursor: wait; opacity: .48; }
   font-size: 36px;
   font-weight: 400;
   line-height: 1.1;
-  flex: 0 1 270px;
 }
 
 .export-layout {
   position: absolute;
   top: 198px;
-  right: 80px;
+  right: 54px;
   bottom: 112px;
-  left: 80px;
-  display: flex;
+  left: 392px;
+  display: grid;
   align-items: center;
-  justify-content: center;
-  gap: 34px;
+  justify-items: start;
 }
-.export-monkey { width: 256px; height: 384px; }
 .export-file {
   display: grid;
   width: min-content;
