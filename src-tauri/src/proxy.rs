@@ -16,7 +16,7 @@ use serde::Serialize;
 use std::{
     io::Read,
     net::{IpAddr, Ipv4Addr, UdpSocket},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 use tauri::{AppHandle, Manager, State};
@@ -274,6 +274,13 @@ fn app_data_directory(app: &AppHandle) -> anyhow::Result<PathBuf> {
     Ok(app.path().app_data_dir()?)
 }
 
+/// Keeps captured exports in SwagEx's private application-support directory.
+/// Writing directly to Downloads would require the macOS Files & Folders
+/// permission before the capture confirmation can be displayed.
+fn exports_directory(app_data: &Path) -> PathBuf {
+    app_data.join("exports")
+}
+
 fn configured(app: &AppHandle) -> anyhow::Result<SetupSettings> {
     setup::read(&app_data_directory(app)?)
 }
@@ -304,7 +311,7 @@ async fn start_proxy(
     tokio::time::sleep(std::time::Duration::from_millis(80)).await;
 
     let app_data = app_data_directory(&app)?;
-    let output_directory = app.path().download_dir()?;
+    let output_directory = exports_directory(&app_data);
     let local_ip = local_ipv4()?;
     let settings = configured(&app)?;
     let certificate_directory = app_data.join("certificate");
@@ -532,5 +539,12 @@ mod tests {
         assert!(is_game_host("qpyou.cn"));
         assert!(!is_game_host("example.com"));
         assert!(!is_game_host("qpyou.cn.example.com"));
+    }
+
+    #[test]
+    fn exports_stay_in_the_app_private_directory() {
+        let app_data = Path::new("/tmp/swagex-app-data");
+
+        assert_eq!(exports_directory(app_data), app_data.join("exports"),);
     }
 }

@@ -11,8 +11,8 @@ use proxy::{
     reset_setup, start_certificate_setup, start_proxy_setup,
 };
 
-/// Reveals the JSON in Finder through macOS Launch Services. SwagEx does not
-/// inspect the Downloads directory, so macOS does not need to grant it access.
+/// Reveals an application-private export in Finder through macOS Launch
+/// Services, without requiring access to the user's Downloads folder.
 #[tauri::command]
 fn reveal_export_in_finder(path: String) -> Result<(), String> {
     let export_path = PathBuf::from(path);
