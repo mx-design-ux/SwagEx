@@ -477,15 +477,11 @@ async fn start_proxy(
                 .with_http_handler(handler)
                 .with_graceful_shutdown(cancel.clone().cancelled_owned())
                 .build()?;
-            crate::steam::activate(
-                &mut state
-                    .steam_route
-                    .lock()
-                    .map_err(|_| anyhow::anyhow!("état Steam indisponible"))?,
-                prepared,
-                proxy_address,
-                cancel.clone(),
-            )?;
+            let mut steam_route = state
+                .steam_route
+                .lock()
+                .map_err(|_| anyhow::anyhow!("état Steam indisponible"))?;
+            crate::steam::activate(&mut steam_route, prepared, proxy_address, cancel.clone())?;
 
             let shared = Arc::clone(&state.shared);
             let proxy_cancel = cancel.clone();
