@@ -119,7 +119,7 @@ button:disabled { cursor: wait; opacity: .48; }
   line-height: 1;
   text-align: center;
 }
-.device-screen .screen-title { top: 82px; }
+.device-screen .screen-title { top: 126px; }
 .proxy-title { top: 128px; }
 
 .device-choice-layout {
@@ -143,7 +143,9 @@ button:disabled { cursor: wait; opacity: .48; }
   color: var(--gold);
   background: transparent;
   cursor: pointer;
+  transition: border-color 200ms ease-in-out;
 }
+.device-choice:not(:disabled):hover { border-color: var(--gold); }
 .device-choice img { display: block; width: 76px; height: 76px; object-fit: contain; }
 .device-choice span { font-size: 22px; font-weight: 700; line-height: 1; }
 .device-choice:disabled { cursor: default; opacity: .46; }
