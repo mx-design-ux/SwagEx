@@ -10,6 +10,7 @@ const SETTINGS_FILE: &str = "settings.json";
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct SetupSettings {
     pub certificate_setup_completed: bool,
+    pub windows_certificate_setup_completed: bool,
     pub proxy_setup_completed: bool,
 }
 
@@ -17,6 +18,8 @@ pub struct SetupSettings {
 struct StoredSettings {
     #[serde(default)]
     certificate_setup_completed: bool,
+    #[serde(default)]
+    windows_certificate_setup_completed: bool,
     #[serde(default)]
     proxy_setup_completed: bool,
     #[serde(default)]
@@ -41,6 +44,7 @@ pub fn read(app_data_directory: &Path) -> anyhow::Result<SetupSettings> {
     let legacy_completed = stored.setup_completed;
     Ok(SetupSettings {
         certificate_setup_completed: stored.certificate_setup_completed || legacy_completed,
+        windows_certificate_setup_completed: stored.windows_certificate_setup_completed,
         proxy_setup_completed: stored.proxy_setup_completed || legacy_completed,
     })
 }
@@ -70,6 +74,7 @@ mod tests {
             directory.path(),
             SetupSettings {
                 certificate_setup_completed: true,
+                windows_certificate_setup_completed: true,
                 proxy_setup_completed: true,
             },
         )
@@ -78,6 +83,7 @@ mod tests {
             read(directory.path()).unwrap(),
             SetupSettings {
                 certificate_setup_completed: true,
+                windows_certificate_setup_completed: true,
                 proxy_setup_completed: true,
             }
         );
@@ -98,6 +104,7 @@ mod tests {
             read(directory.path()).unwrap(),
             SetupSettings {
                 certificate_setup_completed: true,
+                windows_certificate_setup_completed: false,
                 proxy_setup_completed: true,
             }
         );

@@ -44,7 +44,7 @@ button:disabled { cursor: wait; opacity: .48; }
 /* Splash is deliberately composed from its illustration and typography, not a screen image. */
 .splash-brand {
   position: absolute;
-  top: 118px;
+  top: 77px;
   left: 50%;
   display: grid;
   width: 420px;
@@ -76,7 +76,7 @@ button:disabled { cursor: wait; opacity: .48; }
 .splash-loading {
   position: absolute;
   right: 0;
-  bottom: 48px;
+  bottom: 32px;
   left: 0;
   margin: 0;
   color: #f0f0f0;
@@ -87,9 +87,9 @@ button:disabled { cursor: wait; opacity: .48; }
 
 .app-header {
   position: absolute;
-  top: 27px;
-  right: 30px;
-  left: 30px;
+  top: 33px;
+  right: 32px;
+  left: 32px;
   z-index: 2;
   display: grid;
   grid-template-columns: 192px minmax(0, 1fr);
@@ -108,7 +108,7 @@ button:disabled { cursor: wait; opacity: .48; }
 .flow-screen { position: absolute; inset: 0; overflow: hidden; }
 .screen-title {
   position: absolute;
-  top: 148px;
+  top: 144px;
   right: 0;
   left: 0;
   margin: 0;
@@ -119,6 +119,35 @@ button:disabled { cursor: wait; opacity: .48; }
   line-height: 1;
   text-align: center;
 }
+.device-screen .screen-title { top: 82px; }
+.proxy-title { top: 128px; }
+
+.device-choice-layout {
+  position: absolute;
+  top: 250px;
+  left: 50%;
+  display: grid;
+  grid-template-columns: repeat(2, 180px);
+  gap: 30px;
+  transform: translateX(-50%);
+}
+.device-choice {
+  display: grid;
+  width: 180px;
+  height: 230px;
+  align-content: center;
+  justify-items: center;
+  gap: 18px;
+  border: 2px solid #353535;
+  border-radius: 30px;
+  color: var(--gold);
+  background: transparent;
+  cursor: pointer;
+}
+.device-choice img { display: block; width: 76px; height: 76px; object-fit: contain; }
+.device-choice span { font-size: 22px; font-weight: 700; line-height: 1; }
+.device-choice:disabled { cursor: default; opacity: .46; }
+.android-choice { visibility: hidden; }
 
 .bottom-action {
   position: absolute;
@@ -140,7 +169,7 @@ button:disabled { cursor: wait; opacity: .48; }
 
 .certificate-layout {
   position: absolute;
-  top: 202px;
+  top: 168px;
   right: 60px;
   bottom: 105px;
   left: 60px;
@@ -178,7 +207,7 @@ button:disabled { cursor: wait; opacity: .48; }
   display: grid;
   min-width: 0;
   grid-template-columns: 40px minmax(0, 1fr);
-  column-gap: 18px;
+  column-gap: 14px;
   align-items: center;
   counter-increment: step;
   font-size: 20px;
@@ -210,18 +239,22 @@ button:disabled { cursor: wait; opacity: .48; }
 
 .proxy-layout {
   position: absolute;
-  top: 198px;
-  right: 54px;
-  bottom: 112px;
-  left: 392px;
-  display: grid;
-  align-items: center;
+  top: 248px;
+  right: 77px;
+  left: 324px;
 }
 .screen-monkey { display: block; object-fit: contain; object-position: center; }
 .stage-monkey {
   position: absolute;
-  top: 198px;
-  left: 104px;
+  top: 168px;
+  left: 89px;
+  width: 256px;
+  height: 384px;
+}
+.windows-monkey {
+  position: absolute;
+  top: 168px;
+  left: 89px;
   width: 256px;
   height: 384px;
 }
@@ -241,15 +274,21 @@ button:disabled { cursor: wait; opacity: .48; }
 .proxy-actions .secondary-action { min-width: 233px; }
 .proxy-actions .primary-action { min-width: 200px; }
 
+.windows-certificate-steps {
+  position: absolute;
+  top: 252px;
+  right: 86px;
+  left: 324px;
+  row-gap: 30px;
+}
+.windows-certificate-steps li { font-size: 20px; line-height: 1.28; }
+.windows-certificate-screen .bottom-action { min-width: 234px; }
+
 .callout-layout {
   position: absolute;
-  top: 198px;
+  top: 248px;
   right: 54px;
-  bottom: 112px;
-  left: 392px;
-  display: grid;
-  align-items: center;
-  justify-items: start;
+  left: 324px;
 }
 .callout-title {
   margin: 0;
@@ -262,17 +301,12 @@ button:disabled { cursor: wait; opacity: .48; }
 
 .export-layout {
   position: absolute;
-  top: 198px;
+  top: 258px;
   right: 54px;
-  bottom: 112px;
-  left: 392px;
-  display: grid;
-  align-items: center;
-  justify-items: start;
+  left: 324px;
 }
 .export-file {
   display: grid;
-  width: min-content;
   min-width: 0;
   justify-items: start;
   gap: 10px;
@@ -281,10 +315,40 @@ button:disabled { cursor: wait; opacity: .48; }
   color: #f7f7f7;
   background: transparent;
   cursor: pointer;
-  text-align: left;
+  text-align: center;
 }
-.export-file img { display: block; width: 64px; height: 64px; }
-.export-file span {
+.export-icon {
+  position: relative;
+  display: block;
+  width: 48px;
+  height: 52px;
+  border: 4px solid var(--gold);
+  border-radius: 17px;
+  margin-left: 10px;
+}
+.export-icon::before {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 15px;
+  height: 15px;
+  border-right: 4px solid var(--gold);
+  border-bottom: 4px solid var(--gold);
+  border-bottom-right-radius: 9px;
+  content: "";
+}
+.export-icon::after {
+  position: absolute;
+  right: 9px;
+  bottom: 12px;
+  width: 22px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--gold);
+  box-shadow: 0 8px 0 -1px var(--gold);
+  content: "";
+}
+.export-file #export-name {
   display: block;
   max-width: 270px;
   overflow: hidden;
@@ -293,6 +357,8 @@ button:disabled { cursor: wait; opacity: .48; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.waiting-screen .bottom-action,
+.json-screen .bottom-action { min-width: 190px; }
 
 .error-screen { display: grid; place-items: center; align-content: center; gap: 18px; padding: 0 70px; }
 .error-screen h1 { margin: 0; color: #f3f3f3; font-size: 25px; }

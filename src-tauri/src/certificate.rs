@@ -4,11 +4,30 @@ use rcgen::{
     BasicConstraints, CertificateParams, DistinguishedName, DnType, IsCa, Issuer, KeyPair,
     KeyUsagePurpose,
 };
-use std::{fs, os::unix::fs::PermissionsExt, path::Path};
+use std::{fs, path::Path};
 
 const CERTIFICATE_FILE: &str = "SwagEx-CA.pem";
 const CERTIFICATE_DER_FILE: &str = "SwagEx-CA.cer";
 const PRIVATE_KEY_FILE: &str = "SwagEx-CA.key";
+
+pub fn certificate_der_path(directory: &Path) -> std::path::PathBuf {
+    directory.join(CERTIFICATE_DER_FILE)
+}
+
+#[cfg(unix)]
+fn restrict_private_key_permissions(path: &Path) -> anyhow::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn restrict_private_key_permissions(_path: &Path) -> anyhow::Result<()> {
+    // Windows stores application data in the current user's private profile.
+    // POSIX mode bits do not exist there; its ACL remains the authority.
+    Ok(())
+}
 
 /// Builds an iOS configuration profile containing only the public SwagEx CA.
 ///
@@ -72,7 +91,7 @@ pub fn ensure_certificate(directory: &Path) -> anyhow::Result<CertificateMateria
     let directory_existed = directory.exists();
     fs::create_dir_all(directory)?;
     let certificate_path = directory.join(CERTIFICATE_FILE);
-    let certificate_der_path = directory.join(CERTIFICATE_DER_FILE);
+    let certificate_der_path = certificate_der_path(directory);
     let private_key_path = directory.join(PRIVATE_KEY_FILE);
 
     let certificate_exists = certificate_path.exists();
@@ -83,7 +102,7 @@ pub fn ensure_certificate(directory: &Path) -> anyhow::Result<CertificateMateria
 
     // A normal first launch creates the directory and all three files. Once a
     // CA exists, silently creating a replacement would invalidate the trust
-    // relationship already installed on the iPhone. Require an explicit
+    // relationship already installed on the Apple device. Require an explicit
     // regeneration instead of rotating the certificate behind the user's back.
     if !all_files_exist && (directory_existed || !no_files_exist) {
         bail!(
@@ -111,7 +130,7 @@ pub fn ensure_certificate(directory: &Path) -> anyhow::Result<CertificateMateria
         fs::write(&certificate_path, certificate.pem())?;
         fs::write(&certificate_der_path, certificate.der().as_ref())?;
         fs::write(&private_key_path, key_pair.serialize_pem())?;
-        fs::set_permissions(&private_key_path, fs::Permissions::from_mode(0o600))?;
+        restrict_private_key_permissions(&private_key_path)?;
     }
 
     let certificate_pem = fs::read_to_string(&certificate_path)
@@ -153,12 +172,17 @@ mod tests {
         assert!(!second.was_created);
         assert_eq!(first.der, second.der);
 
-        let mode = fs::metadata(certificate_directory.join(PRIVATE_KEY_FILE))
-            .unwrap()
-            .permissions()
-            .mode()
-            & 0o777;
-        assert_eq!(mode, 0o600);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let mode = fs::metadata(certificate_directory.join(PRIVATE_KEY_FILE))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o600);
+        }
     }
 
     #[test]

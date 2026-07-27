@@ -8,12 +8,20 @@ import * as QRCode from "qrcode";
 import "@fontsource/kalam/400.css";
 import "./styles.css";
 
-type Phase = "idle" | "certificate_setup" | "proxy_setup" | "listening" | "captured" | "error";
+type Phase =
+  | "idle"
+  | "certificate_setup"
+  | "windows_certificate_setup"
+  | "proxy_setup"
+  | "listening"
+  | "captured"
+  | "error";
 
 type StatusSnapshot = {
   phase: Phase;
   message: string;
   certificateSetupCompleted: boolean;
+  windowsCertificateSetupCompleted: boolean;
   proxySetupCompleted: boolean;
   localIp?: string;
   port?: number;
@@ -23,10 +31,16 @@ type StatusSnapshot = {
   profileName?: string;
 };
 
+type GameDevice = "ios" | "steam" | "android";
+
+const GAME_DEVICE_STORAGE_KEY = "swagex.game-device";
+
 const elements = {
   splash: document.querySelector<HTMLElement>("#splash-screen")!,
   app: document.querySelector<HTMLElement>("#app-screen")!,
+  deviceScreen: document.querySelector<HTMLElement>("#device-screen")!,
   certificateScreen: document.querySelector<HTMLElement>("#certificate-screen")!,
+  windowsCertificateScreen: document.querySelector<HTMLElement>("#windows-certificate-screen")!,
   proxyScreen: document.querySelector<HTMLElement>("#proxy-screen")!,
   waitingScreen: document.querySelector<HTMLElement>("#waiting-screen")!,
   jsonScreen: document.querySelector<HTMLElement>("#json-screen")!,
@@ -34,6 +48,7 @@ const elements = {
   certificateQr: document.querySelector<HTMLImageElement>("#certificate-qr")!,
   certificateDownload: document.querySelector<HTMLButtonElement>("#certificate-download")!,
   certificateDone: document.querySelector<HTMLButtonElement>("#certificate-done")!,
+  windowsCertificateAction: document.querySelector<HTMLButtonElement>("#windows-certificate-action")!,
   proxyHost: document.querySelector<HTMLElement>("#proxy-host")!,
   proxyPort: document.querySelector<HTMLElement>("#proxy-port")!,
   proxyDone: document.querySelector<HTMLButtonElement>("#proxy-done")!,
@@ -50,6 +65,9 @@ const elements = {
   updateProgress: document.querySelector<HTMLElement>("#update-progress")!,
   updateDismiss: document.querySelector<HTMLButtonElement>("#update-dismiss")!,
   updateInstall: document.querySelector<HTMLButtonElement>("#update-install")!,
+  chooseApple: document.querySelector<HTMLButtonElement>("#choose-apple")!,
+  chooseSteam: document.querySelector<HTMLButtonElement>("#choose-steam")!,
+  chooseAndroid: document.querySelector<HTMLButtonElement>("#choose-android")!,
 };
 
 let latestStatus: StatusSnapshot | null = null;
@@ -57,10 +75,88 @@ let pollTimer: number | undefined;
 let actionInProgress = false;
 let availableUpdate: Update | null = null;
 let updateInProgress = false;
+let windowsCertificateWasOpened = false;
 
 function showScreen(screen: HTMLElement): void {
-  [elements.certificateScreen, elements.proxyScreen, elements.waitingScreen, elements.jsonScreen, elements.errorScreen]
+  [
+    elements.deviceScreen,
+    elements.certificateScreen,
+    elements.windowsCertificateScreen,
+    elements.proxyScreen,
+    elements.waitingScreen,
+    elements.jsonScreen,
+    elements.errorScreen,
+  ]
     .forEach((candidate) => { candidate.hidden = candidate !== screen; });
+  elements.app.dataset.screen = screen.dataset.screen ?? "";
+}
+
+function selectedGameDevice(): GameDevice | null {
+  const stored = localStorage.getItem(GAME_DEVICE_STORAGE_KEY);
+  if (stored === "apple" || stored === "ios") return "ios";
+  if (stored === "steam") return "steam";
+  if (stored === "android") return "android";
+  return null;
+}
+
+function showGameDeviceChoice(): void {
+  stopPolling();
+  windowsCertificateWasOpened = false;
+  elements.windowsCertificateAction.textContent = "Installer le certificat";
+  showScreen(elements.deviceScreen);
+}
+
+async function startIosFlow(): Promise<void> {
+  const status = await invoke<StatusSnapshot>("export_status");
+  const next = status.certificateSetupCompleted
+    ? await invoke<StatusSnapshot>("start_proxy_setup")
+    : await invoke<StatusSnapshot>("start_certificate_setup", { regenerate: false });
+  updateStatus(next);
+  beginPolling();
+}
+
+async function selectAppleDevice(): Promise<void> {
+  localStorage.setItem(GAME_DEVICE_STORAGE_KEY, "ios");
+  try {
+    await startIosFlow();
+  } catch (error) {
+    elements.errorMessage.textContent = String(error);
+    showScreen(elements.errorScreen);
+  }
+}
+
+async function startSteamFlow(): Promise<void> {
+  const status = await invoke<StatusSnapshot>("export_status");
+  const next = status.windowsCertificateSetupCompleted
+    ? await invoke<StatusSnapshot>("start_steam_capture")
+    : await invoke<StatusSnapshot>("start_windows_certificate_setup");
+  updateStatus(next);
+  beginPolling();
+}
+
+async function selectSteamDevice(): Promise<void> {
+  localStorage.setItem(GAME_DEVICE_STORAGE_KEY, "steam");
+  try {
+    await startSteamFlow();
+  } catch (error) {
+    elements.errorMessage.textContent = String(error);
+    showScreen(elements.errorScreen);
+  }
+}
+
+async function changeGameDevice(): Promise<void> {
+  stopPolling();
+  if (["certificate_setup", "windows_certificate_setup", "proxy_setup", "listening"].includes(latestStatus?.phase ?? "")) {
+    try {
+      const command = selectedGameDevice() === "steam" ? "cancel_steam_export" : "cancel_export";
+      latestStatus = await invoke<StatusSnapshot>(command);
+    } catch {
+      // Returning to the choice screen must remain possible if the listener
+      // already stopped between the last status refresh and this menu action.
+    }
+  }
+  localStorage.removeItem(GAME_DEVICE_STORAGE_KEY);
+  showGameDeviceChoice();
 }
 
 function updateStatus(status: StatusSnapshot): void {
@@ -68,8 +164,14 @@ function updateStatus(status: StatusSnapshot): void {
 
   if (status.phase === "certificate_setup") {
     showScreen(elements.certificateScreen);
+  } else if (status.phase === "windows_certificate_setup") {
+    showScreen(elements.windowsCertificateScreen);
   } else if (status.phase === "proxy_setup" || status.phase === "idle") {
-    showScreen(elements.proxyScreen);
+    if (selectedGameDevice() === "steam") {
+      showScreen(elements.windowsCertificateScreen);
+    } else {
+      showScreen(elements.proxyScreen);
+    }
   } else if (status.phase === "listening") {
     showScreen(elements.waitingScreen);
   } else if (status.phase === "captured") {
@@ -87,7 +189,7 @@ function updateStatus(status: StatusSnapshot): void {
 
   if (status.phase === "certificate_setup" && status.certificateUrl) {
     void QRCode.toDataURL(status.certificateUrl, {
-      margin: 1,
+      margin: 0,
       width: 232,
       errorCorrectionLevel: "M",
       color: { dark: "#FFC156", light: "#181818" },
@@ -100,7 +202,22 @@ function updateStatus(status: StatusSnapshot): void {
       : "Compte.json";
   }
 
+  if (
+    status.phase === "windows_certificate_setup"
+    || (status.phase === "idle" && selectedGameDevice() === "steam")
+  ) {
+    if (status.windowsCertificateSetupCompleted) {
+      windowsCertificateWasOpened = false;
+      elements.windowsCertificateAction.textContent = "Démarrer l’écoute";
+    } else {
+      elements.windowsCertificateAction.textContent = windowsCertificateWasOpened
+        ? "J’ai terminé !"
+        : "Installer le certificat";
+    }
+  }
+
   elements.certificateDone.disabled = actionInProgress;
+  elements.windowsCertificateAction.disabled = actionInProgress;
   elements.proxyDone.disabled = actionInProgress;
   elements.regenerateCertificate.disabled = actionInProgress;
 }
@@ -200,14 +317,23 @@ async function checkForUpdates(manual: boolean): Promise<void> {
 
 async function installAppMenu(): Promise<void> {
   try {
+    const changeDevice = changeDeviceMenuItem();
     const updates = updateMenuItem();
     const quit = quitMenuItem();
-    const appSubmenu = await Submenu.new({ text: "SwagEx", items: [updates, quit] });
+    const appSubmenu = await Submenu.new({ text: "SwagEx", items: [changeDevice, updates, quit] });
     const menu = await Menu.new({ items: [appSubmenu] });
     await menu.setAsAppMenu();
   } catch {
     // The native menu is optional in browser development and older runtimes.
   }
+}
+
+function changeDeviceMenuItem() {
+  return {
+    id: "change-game-device",
+    text: "Changer mon appareil de jeu…",
+    action: () => { void changeGameDevice(); },
+  } as const;
 }
 
 function updateMenuItem() {
@@ -218,9 +344,17 @@ function updateMenuItem() {
   } as const;
 }
 
-function quitApplication(): void {
+async function quitApplication(): Promise<void> {
   stopPolling();
-  void getCurrentWindow().close().catch((error) => {
+  if (selectedGameDevice() === "steam") {
+    try {
+      await invoke("stop_steam_capture");
+    } catch {
+      // Closing the application must remain possible if the listener already
+      // stopped and its Windows hosts entries were already restored.
+    }
+  }
+  await getCurrentWindow().close().catch((error) => {
     elements.errorMessage.textContent = `Impossible de fermer SwagEx : ${String(error)}`;
     showScreen(elements.errorScreen);
   });
@@ -231,7 +365,7 @@ function quitMenuItem() {
     id: "quit-app",
     text: "Quitter SwagEx",
     accelerator: "CmdOrCtrl+Q",
-    action: quitApplication,
+    action: () => { void quitApplication(); },
   } as const;
 }
 
@@ -243,6 +377,7 @@ async function runAction(command: string, args?: Record<string, unknown>): Promi
     phase: "error",
     message: "Action en cours…",
     certificateSetupCompleted: false,
+    windowsCertificateSetupCompleted: false,
     proxySetupCompleted: false,
     certificateWasCreated: false,
   });
@@ -258,20 +393,54 @@ async function runAction(command: string, args?: Record<string, unknown>): Promi
   }
 }
 
+async function showDevelopmentPreview(): Promise<boolean> {
+  if (!import.meta.env.DEV) return false;
+  const preview = new URLSearchParams(window.location.search).get("preview");
+  if (!preview) return false;
+
+  if (preview === "splash") return true;
+  elements.splash.hidden = true;
+  elements.app.hidden = false;
+  const previews: Record<string, HTMLElement> = {
+    device: elements.deviceScreen,
+    ios: elements.certificateScreen,
+    windows: elements.windowsCertificateScreen,
+    proxy: elements.proxyScreen,
+    waiting: elements.waitingScreen,
+    json: elements.jsonScreen,
+  };
+  const screen = previews[preview] ?? elements.deviceScreen;
+  showScreen(screen);
+  elements.proxyHost.textContent = "192.168.1.24";
+  elements.proxyPort.textContent = "8080";
+  elements.exportName.textContent = "Berserk~~65581.json";
+  if (screen === elements.certificateScreen) {
+    elements.certificateQr.src = await QRCode.toDataURL("http://192.168.1.24:8080/SwagEx.mobileconfig", {
+      margin: 0,
+      width: 232,
+      errorCorrectionLevel: "M",
+      color: { dark: "#FFC156", light: "#181818" },
+    });
+  }
+  return true;
+}
+
 async function initialize(): Promise<void> {
   const splashStartedAt = performance.now();
+  if (await showDevelopmentPreview()) return;
   try {
-    const status = await invoke<StatusSnapshot>("export_status");
-    if (status.certificateSetupCompleted) {
-      updateStatus(await invoke<StatusSnapshot>("start_proxy_setup"));
-    } else {
-      updateStatus(await invoke<StatusSnapshot>("start_certificate_setup", { regenerate: false }));
-    }
+    await invoke<StatusSnapshot>("export_status");
     const remainingSplashTime = Math.max(0, 5000 - (performance.now() - splashStartedAt));
     await new Promise((resolve) => window.setTimeout(resolve, remainingSplashTime));
     elements.splash.hidden = true;
     elements.app.hidden = false;
-    beginPolling();
+    if (selectedGameDevice() === "ios") {
+      await startIosFlow();
+    } else if (selectedGameDevice() === "steam") {
+      await startSteamFlow();
+    } else {
+      showGameDeviceChoice();
+    }
     window.setTimeout(() => { void checkForUpdates(false); }, 1200);
   } catch (error) {
     const remainingSplashTime = Math.max(0, 5000 - (performance.now() - splashStartedAt));
@@ -288,7 +457,7 @@ window.addEventListener("DOMContentLoaded", () => {
     void runAction("complete_certificate_setup");
   });
   elements.proxyDone.addEventListener("click", () => {
-    // The iPhone forgets its manual proxy after each use, so this action is
+    // Apple devices forget their manual proxy after each use, so this action is
     // deliberately identical on every run and immediately starts capture.
     void runAction("complete_proxy_setup");
   });
@@ -296,21 +465,54 @@ window.addEventListener("DOMContentLoaded", () => {
     void runAction("start_certificate_setup", { regenerate: true });
   });
   elements.stopListening.addEventListener("click", () => {
-    void runAction("cancel_export");
+    void runAction(selectedGameDevice() === "steam" ? "cancel_steam_export" : "cancel_export");
+  });
+  elements.windowsCertificateAction.addEventListener("click", () => {
+    if (latestStatus?.windowsCertificateSetupCompleted) {
+      void runAction("start_steam_capture");
+      return;
+    }
+
+    if (windowsCertificateWasOpened) {
+      void runAction("complete_windows_certificate_setup");
+      return;
+    }
+
+    if (actionInProgress) return;
+    actionInProgress = true;
+    elements.windowsCertificateAction.disabled = true;
+    void invoke("open_windows_certificate")
+      .then(() => {
+        windowsCertificateWasOpened = true;
+        elements.windowsCertificateAction.textContent = "J’ai terminé !";
+      })
+      .catch((error) => {
+        elements.errorMessage.textContent = String(error);
+        showScreen(elements.errorScreen);
+      })
+      .finally(() => {
+        actionInProgress = false;
+        elements.windowsCertificateAction.disabled = false;
+      });
   });
   elements.certificateDownload.addEventListener("click", () => {
     if (latestStatus?.certificateUrl) void openUrl(latestStatus.certificateUrl);
   });
   elements.revealExport.addEventListener("click", () => {
     if (!latestStatus?.exportPath) return;
-    void invoke("reveal_export_in_finder", { path: latestStatus.exportPath }).catch((error) => {
+    void invoke("reveal_export_in_file_manager", { path: latestStatus.exportPath }).catch((error) => {
       elements.errorMessage.textContent = `Impossible d’ouvrir le dossier du JSON : ${String(error)}`;
       showScreen(elements.errorScreen);
     });
   });
-  elements.quitApp.addEventListener("click", quitApplication);
+  elements.quitApp.addEventListener("click", () => { void quitApplication(); });
   elements.retryAction.addEventListener("click", () => {
-    if (latestStatus?.certificateSetupCompleted) {
+    const device = selectedGameDevice();
+    if (!device || device === "android") {
+      showGameDeviceChoice();
+    } else if (device === "steam") {
+      void startSteamFlow();
+    } else if (latestStatus?.certificateSetupCompleted) {
       void runAction("start_proxy_setup");
     } else {
       void runAction("start_certificate_setup", { regenerate: false });
@@ -318,6 +520,11 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   elements.updateDismiss.addEventListener("click", closeUpdateDialog);
   elements.updateInstall.addEventListener("click", () => { void installAvailableUpdate(); });
+  elements.chooseApple.addEventListener("click", () => { void selectAppleDevice(); });
+  elements.chooseSteam.addEventListener("click", () => { void selectSteamDevice(); });
+  // Android deliberately remains in the technical device model while its
+  // selector card stays hidden until real-device compatibility is validated.
+  elements.chooseAndroid.addEventListener("click", showGameDeviceChoice);
   void installAppMenu();
   void initialize();
 });

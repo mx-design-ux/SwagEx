@@ -22,35 +22,63 @@
       <section class="app-screen" id="app-screen" hidden>
         <header class="app-header">
           <img class="brand-logo" src="/src/assets/ui/logo-swagex.svg" alt="SwagEx" />
-          <p class="tagline">Summoners War Exporter. Votre iPhone et votre Mac doivent être connectés au même réseau local.</p>
+          <p class="tagline">Summoners War Exporter. Votre appareil de jeu et votre ordinateur doivent être sur le même réseau local.</p>
         </header>
 
-        <section class="flow-screen certificate-screen" id="certificate-screen" hidden aria-labelledby="certificate-title">
-          <h1 id="certificate-title" class="screen-title">Certificat de l’iPhone</h1>
+        <section class="flow-screen device-screen" id="device-screen" data-screen="device" hidden aria-labelledby="device-title">
+          <h1 id="device-title" class="screen-title">Votre appareil de jeu</h1>
+          <div class="device-choice-layout">
+            <button class="device-choice" id="choose-apple" type="button">
+              <img src="/src/assets/ui/apple.svg" alt="" aria-hidden="true" />
+              <span>iOS</span>
+            </button>
+            <button class="device-choice" id="choose-steam" type="button">
+              <img src="/src/assets/ui/steam.svg" alt="" aria-hidden="true" />
+              <span>Steam</span>
+            </button>
+            <button class="device-choice android-choice" id="choose-android" type="button" hidden aria-hidden="true" tabindex="-1">
+              <span>Android</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="flow-screen certificate-screen" id="certificate-screen" data-screen="ios-certificate" hidden aria-labelledby="certificate-title">
+          <h1 id="certificate-title" class="screen-title">Certificat iOS</h1>
           <div class="certificate-layout">
             <button class="dynamic-qr" id="certificate-download" type="button" aria-label="Télécharger le profil de configuration SwagEx">
-              <img id="certificate-qr" alt="QR code pour télécharger le profil SwagEx sur l’iPhone" />
+              <img id="certificate-qr" alt="QR code pour télécharger le profil SwagEx sur un iPhone ou un iPad" />
             </button>
             <ol class="step-list certificate-steps" aria-label="Instructions d’installation du certificat">
-              <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Scannez ce QR code avec l’iPhone, puis <strong>Enregistrer</strong> dans <strong>Fichiers</strong></span></li>
-              <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez l’app <strong>Fichiers</strong> puis <strong>SwagEx</strong> et choisissez votre appareil</span></li>
-              <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Réglages <span class="path-separator">›</span> Profil téléchargé <span class="path-separator">›</span> Installer</span></li>
+              <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Scannez puis <strong>Enregistrer</strong> dans <strong>Fichiers</strong></span></li>
+              <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez <strong>Fichiers</strong>, puis <strong>SwagEx</strong> et choisissez votre appareil</span></li>
+              <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Réglages <span class="path-separator">›</span> Profil téléchargé <span class="path-separator">›</span> <strong>Installer</strong></span></li>
               <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Réglages <span class="path-separator">›</span> Général <span class="path-separator">›</span> Informations <span class="path-separator">›</span> Réglages des certificats <span class="path-separator">›</span> Activez <strong>SwagEx</strong></span></li>
             </ol>
           </div>
           <button class="bottom-action primary-action" id="certificate-done" type="button">J’ai terminé&nbsp;!</button>
         </section>
 
-        <section class="flow-screen proxy-screen" id="proxy-screen" hidden aria-labelledby="proxy-title">
-          <h1 id="proxy-title" class="visually-hidden">Proxy Wi-Fi de l’iPhone</h1>
+        <section class="flow-screen windows-certificate-screen" id="windows-certificate-screen" data-screen="windows-certificate" hidden aria-labelledby="windows-certificate-title">
+          <h1 id="windows-certificate-title" class="screen-title">Certificat Windows</h1>
+          <img class="screen-monkey windows-monkey" src="/src/assets/ui/asset-monkey@2x.png" alt="" aria-hidden="true" />
+          <ol class="step-list windows-certificate-steps" aria-label="Instructions d’installation du certificat Windows">
+            <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Cliquez sur <strong>Installer le certificat</strong></span></li>
+            <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Dans la fenêtre Windows, cliquez sur <strong>Oui</strong></span></li>
+            <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Cet écran ne sera plus nécessaire à l’avenir</span></li>
+          </ol>
+          <button class="bottom-action primary-action" id="windows-certificate-action" type="button">Installer le certificat</button>
+        </section>
+
+        <section class="flow-screen proxy-screen" id="proxy-screen" data-screen="proxy" hidden aria-labelledby="proxy-title">
+          <h1 id="proxy-title" class="screen-title proxy-title">Préparation de l’appareil</h1>
           <img class="screen-monkey stage-monkey" src="/src/assets/ui/asset-monkey@2x.png" alt="" aria-hidden="true" />
           <div class="proxy-layout">
             <ol class="step-list proxy-steps" aria-label="Configuration du proxy Wi-Fi">
-              <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez Réglages <span class="path-separator">›</span> Wi‑Fi sur l’iPhone</span></li>
+              <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez Réglages <span class="path-separator">›</span> Wi‑Fi sur votre appareil</span></li>
               <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Touchez ⓘ à côté du réseau connecté, puis Configurer le proxy <span class="path-separator">›</span> Manuel</span></li>
               <li class="proxy-values">
                 <span class="step-number" aria-hidden="true"></span>
-                <span class="step-copy">Saisissez le serveur <strong id="proxy-host">—</strong> et le port <strong id="proxy-port">—</strong>, puis Enregistrer</span>
+                <span class="step-copy">Saisissez le serveur <strong id="proxy-host">—</strong> et le port <strong id="proxy-port">—</strong></span>
               </li>
             </ol>
           </div>
@@ -60,7 +88,7 @@
           </div>
         </section>
 
-        <section class="flow-screen waiting-screen" id="waiting-screen" hidden aria-labelledby="waiting-title">
+        <section class="flow-screen waiting-screen" id="waiting-screen" data-screen="waiting" hidden aria-labelledby="waiting-title">
           <img class="screen-monkey stage-monkey" src="/src/assets/ui/asset-monkey@2x.png" alt="" aria-hidden="true" />
           <div class="callout-layout">
             <h1 id="waiting-title" class="callout-title">Lance le jeu,<br />j’attends…</h1>
@@ -68,11 +96,11 @@
           <button class="bottom-action secondary-action" id="stop-listening" type="button">Arrêter l’écoute</button>
         </section>
 
-        <section class="flow-screen json-screen" id="json-screen" hidden aria-labelledby="json-title">
+        <section class="flow-screen json-screen" id="json-screen" data-screen="json" hidden aria-labelledby="json-title">
           <img class="screen-monkey stage-monkey" src="/src/assets/ui/asset-monkey@2x.png" alt="" aria-hidden="true" />
           <div class="export-layout">
             <button class="export-file" id="reveal-export" type="button" aria-describedby="export-name">
-              <img src="/src/assets/ui/paper.svg" width="64" height="64" alt="" aria-hidden="true" />
+              <span class="export-icon" aria-hidden="true"></span>
               <span id="export-name">Compte.json</span>
             </button>
           </div>
@@ -80,7 +108,7 @@
           <h1 id="json-title" class="visually-hidden">Export JSON terminé</h1>
         </section>
 
-        <section class="flow-screen error-screen" id="error-screen" hidden aria-labelledby="error-title">
+        <section class="flow-screen error-screen" id="error-screen" data-screen="error" hidden aria-labelledby="error-title">
           <h1 id="error-title">Impossible de démarrer SwagEx</h1>
           <p id="error-message" role="alert">—</p>
           <button class="bottom-action primary-action" id="retry-action" type="button">Réessayer</button>
