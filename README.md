@@ -47,6 +47,8 @@ Le menu **SwagEx → Changer mon appareil de jeu…** ramène au choix de l’ap
 
 Depuis la version 0.3.0, l’identifiant distribué est neutre (`app.swagex.desktop`) et les données fonctionnelles résident dans un dossier simplement nommé `SwagEx`. Au premier lancement, l’application déplace automatiquement les certificats, réglages et JSON créés par les versions antérieures. La migration refuse tout écrasement et conserve la même autorité de certification afin de ne pas invalider un certificat déjà approuvé.
 
+Depuis la version 0.3.1, l’écran d’attente n’apparaît qu’après une courte fenêtre de stabilisation du proxy. Le texte d’attente et le fichier JSON final apparaissent avec une transition d’opacité de 200 ms.
+
 Après capture, le nom du fichier JSON et son icône sont cliquables pour afficher le dossier correspondant dans Finder sur macOS ou l’Explorateur de fichiers sur Windows, puis **Quitter SwagEx** ferme l’application.
 
 Le produit est communautaire et non officiel. SwagEx ne modifie pas le jeu et ne doit pas être utilisé pour automatiser des actions de jeu.

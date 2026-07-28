@@ -22,6 +22,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, UdpSocket},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 use tauri::{AppHandle, State};
 use tokio::net::TcpListener;
@@ -48,6 +49,7 @@ use tower_service::Service;
 const PREFERRED_PROXY_PORT: u16 = 8080;
 const PROFILE_PATH: &str = "/api/gateway_c2.php";
 const CERTIFICATE_PROFILE_PATH: &str = "/SwagEx.mobileconfig";
+const LISTENER_READY_SETTLE_DELAY: Duration = Duration::from_millis(200);
 
 #[cfg(target_os = "windows")]
 #[derive(Clone, Default)]
@@ -547,7 +549,15 @@ async fn start_proxy(
         export_path: None,
         profile_name: None,
     };
-    state.shared.replace(status.clone());
+    if phase == "listening" {
+        state.shared.replace(StatusSnapshot {
+            phase: "proxy_setup".into(),
+            message: "Démarrage de l’écoute…".into(),
+            ..status.clone()
+        });
+    } else {
+        state.shared.replace(status.clone());
+    }
     *state
         .cancel
         .lock()
@@ -571,7 +581,21 @@ async fn start_proxy(
         });
     }
 
-    Ok(status)
+    if phase == "listening" {
+        // Binding the socket makes the port available, but the newly spawned
+        // proxy task still needs to be polled before it can accept the game's
+        // first connection. Do not expose the waiting screen until that task
+        // has had a short, bounded readiness window.
+        tokio::task::yield_now().await;
+        tokio::time::sleep(LISTENER_READY_SETTLE_DELAY).await;
+        let observed = state.shared.snapshot();
+        if matches!(observed.phase.as_str(), "captured" | "error") {
+            return Ok(observed);
+        }
+    }
+
+    state.shared.replace(status);
+    Ok(state.shared.snapshot())
 }
 
 #[tauri::command]
