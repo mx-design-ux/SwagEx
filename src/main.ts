@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { Menu, Submenu } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -68,6 +69,7 @@ const elements = {
   chooseApple: document.querySelector<HTMLButtonElement>("#choose-apple")!,
   chooseSteam: document.querySelector<HTMLButtonElement>("#choose-steam")!,
   chooseAndroid: document.querySelector<HTMLButtonElement>("#choose-android")!,
+  appVersions: Array.from(document.querySelectorAll<HTMLElement>("[data-app-version]")),
 };
 
 let latestStatus: StatusSnapshot | null = null;
@@ -76,6 +78,13 @@ let actionInProgress = false;
 let availableUpdate: Update | null = null;
 let updateInProgress = false;
 let windowsCertificateWasOpened = false;
+
+async function renderAppVersion(): Promise<void> {
+  const version = await getVersion();
+  elements.appVersions.forEach((element) => {
+    element.textContent = version;
+  });
+}
 
 function showScreen(screen: HTMLElement): void {
   [
@@ -429,6 +438,7 @@ async function initialize(): Promise<void> {
   const splashStartedAt = performance.now();
   if (await showDevelopmentPreview()) return;
   try {
+    await renderAppVersion();
     await invoke("recover_steam_route");
     await invoke<StatusSnapshot>("export_status");
     const remainingSplashTime = Math.max(0, 5000 - (performance.now() - splashStartedAt));
