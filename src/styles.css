@@ -317,8 +317,8 @@ button:disabled { cursor: wait; opacity: .48; }
 }
 
 .waiting-screen:not([hidden]) .callout-title,
-.json-screen:not([hidden]) .export-file {
-  animation: content-appear 200ms ease-in-out both;
+.json-screen:not([hidden]) .export-layout {
+  animation: content-appear 1s ease-in-out both;
 }
 
 .export-layout {
@@ -379,6 +379,13 @@ button:disabled { cursor: wait; opacity: .48; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.export-reminder {
+  max-width: 330px;
+  margin: 20px 0 0;
+  color: #a5a5a5;
+  font-size: 16px;
+  line-height: 1.35;
+}
 .waiting-screen .bottom-action,
 .json-screen .bottom-action { min-width: 190px; }
 
@@ -400,7 +407,7 @@ button:disabled { cursor: wait; opacity: .48; }
 
 @media (prefers-reduced-motion: reduce) {
   .waiting-screen:not([hidden]) .callout-title,
-  .json-screen:not([hidden]) .export-file {
+  .json-screen:not([hidden]) .export-layout {
     animation: none;
   }
 }

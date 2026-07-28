@@ -49,6 +49,8 @@ Depuis la version 0.3.0, l’identifiant distribué est neutre (`app.swagex.desk
 
 Depuis la version 0.3.1, l’écran d’attente n’apparaît qu’après une courte fenêtre de stabilisation du proxy. Le texte d’attente et le fichier JSON final apparaissent avec une transition d’opacité de 200 ms.
 
+Depuis la version 0.3.2, cette transition d’opacité dure une seconde afin de rester perceptible. L’écran final rappelle également que le proxy Wi‑Fi peut être désactivé après la création du JSON.
+
 Après capture, le nom du fichier JSON et son icône sont cliquables pour afficher le dossier correspondant dans Finder sur macOS ou l’Explorateur de fichiers sur Windows, puis **Quitter SwagEx** ferme l’application.
 
 Le produit est communautaire et non officiel. SwagEx ne modifie pas le jeu et ne doit pas être utilisé pour automatiser des actions de jeu.
