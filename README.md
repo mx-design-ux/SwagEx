@@ -53,6 +53,8 @@ Depuis la version 0.3.2, cette transition d’opacité dure une seconde afin de 
 
 Depuis la version 0.3.3, les sept écrans du parcours suivent les mesures du document Sketch de référence : grille du sélecteur, étapes, boutons, alignement commun des textes d’attente et d’export, splash versionné et carte Android désactivée.
 
+Depuis la version 0.3.4, les boutons reprennent exactement le centrage et les états de survol des symboles Sketch. L’obtention du JSON déclenche également le passage animé du singe à l’illustration finale.
+
 Après capture, le nom du fichier JSON et son icône sont cliquables pour afficher le dossier correspondant dans Finder sur macOS ou l’Explorateur de fichiers sur Windows, puis **Quitter SwagEx** ferme l’application.
 
 Le produit est communautaire et non officiel. SwagEx ne modifie pas le jeu et ne doit pas être utilisé pour automatiser des actions de jeu.
