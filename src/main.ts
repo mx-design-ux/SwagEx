@@ -429,6 +429,7 @@ async function initialize(): Promise<void> {
   const splashStartedAt = performance.now();
   if (await showDevelopmentPreview()) return;
   try {
+    await invoke("recover_steam_route");
     await invoke<StatusSnapshot>("export_status");
     const remainingSplashTime = Math.max(0, 5000 - (performance.now() - splashStartedAt));
     await new Promise((resolve) => window.setTimeout(resolve, remainingSplashTime));

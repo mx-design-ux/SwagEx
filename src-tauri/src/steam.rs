@@ -26,11 +26,11 @@ impl SteamRouteState {
     pub fn stop(&mut self) -> anyhow::Result<()> {
         #[cfg(target_os = "windows")]
         {
-            if self.hosts_active {
-                restore_hosts_file()?;
+            let restored_stale_route = restore_hosts_file()?;
+            if self.hosts_active || restored_stale_route {
                 flush_dns_cache()?;
-                self.hosts_active = false;
             }
+            self.hosts_active = false;
         }
 
         Ok(())
@@ -62,6 +62,15 @@ struct SteamEndpoint {
     listener: tokio::net::TcpListener,
 }
 
+pub fn recover_stale_route() -> anyhow::Result<()> {
+    #[cfg(target_os = "windows")]
+    if restore_hosts_file()? {
+        flush_dns_cache()?;
+    }
+
+    Ok(())
+}
+
 #[cfg(target_os = "windows")]
 pub async fn prepare() -> anyhow::Result<PreparedSteamRoute> {
     use std::net::{IpAddr, Ipv4Addr};
@@ -70,16 +79,13 @@ pub async fn prepare() -> anyhow::Result<PreparedSteamRoute> {
     // only that marked block before resolving the real game endpoints.
     restore_hosts_file()?;
     flush_dns_cache()?;
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
 
     let mut upstream_hosts = HashMap::new();
     let mut listeners = Vec::with_capacity(STEAM_HOSTS.len());
 
     for (hostname, loopback_octets) in STEAM_HOSTS {
-        let upstream = tokio::net::lookup_host((hostname, 443))
-            .await?
-            .map(|address| address.ip())
-            .find(|address| !address.is_loopback())
-            .ok_or_else(|| anyhow::anyhow!("aucune adresse distante trouvée pour {hostname}"))?;
+        let upstream = resolve_upstream(hostname).await?;
         upstream_hosts.insert(hostname.to_string(), upstream);
 
         let loopback = Ipv4Addr::from(loopback_octets);
@@ -105,6 +111,46 @@ pub async fn prepare() -> anyhow::Result<PreparedSteamRoute> {
         listeners,
         upstream_hosts,
     })
+}
+
+#[cfg(target_os = "windows")]
+async fn resolve_upstream(hostname: &str) -> anyhow::Result<std::net::IpAddr> {
+    const MAX_ATTEMPTS: usize = 20;
+    const RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(250);
+
+    let mut last_error = None;
+    for attempt in 0..MAX_ATTEMPTS {
+        match tokio::net::lookup_host((hostname, 443)).await {
+            Ok(addresses) => {
+                if let Some(address) = first_remote_address(addresses) {
+                    return Ok(address);
+                }
+            }
+            Err(error) => last_error = Some(error),
+        }
+
+        if attempt + 1 < MAX_ATTEMPTS {
+            tokio::time::sleep(RETRY_DELAY).await;
+        }
+    }
+
+    let _ = flush_dns_cache();
+    if let Some(error) = last_error {
+        anyhow::bail!("Windows ne parvient pas à résoudre {hostname} : {error}");
+    }
+    anyhow::bail!(
+        "Windows conserve une ancienne redirection réseau pour {hostname}. Fermez Summoners War puis cliquez sur Réessayer."
+    )
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn first_remote_address(
+    addresses: impl IntoIterator<Item = std::net::SocketAddr>,
+) -> Option<std::net::IpAddr> {
+    addresses
+        .into_iter()
+        .map(|address| address.ip())
+        .find(|address| !address.is_loopback())
 }
 
 #[cfg(target_os = "windows")]
@@ -212,14 +258,15 @@ fn hosts_file_path() -> std::path::PathBuf {
 }
 
 #[cfg(target_os = "windows")]
-fn restore_hosts_file() -> anyhow::Result<()> {
+fn restore_hosts_file() -> anyhow::Result<bool> {
     let path = hosts_file_path();
     let contents = std::fs::read_to_string(&path)?;
     let cleaned = without_owned_hosts_block(&contents);
-    if cleaned != contents {
+    let restored = cleaned != contents;
+    if restored {
         std::fs::write(&path, cleaned)?;
     }
-    Ok(())
+    Ok(restored)
 }
 
 #[cfg(target_os = "windows")]
@@ -327,5 +374,18 @@ mod tests {
         addresses.sort_unstable();
         addresses.dedup();
         assert_eq!(addresses.len(), STEAM_HOSTS.len());
+    }
+
+    #[test]
+    fn upstream_resolution_ignores_stale_loopback_addresses() {
+        let addresses = [
+            "127.11.12.13:443".parse().unwrap(),
+            "34.160.156.240:443".parse().unwrap(),
+        ];
+
+        assert_eq!(
+            first_remote_address(addresses),
+            Some("34.160.156.240".parse().unwrap())
+        );
     }
 }

@@ -29,6 +29,11 @@ fn reveal_export_in_file_manager(path: String) -> Result<(), String> {
     reveal_in_platform_file_manager(&export_path)
 }
 
+#[tauri::command]
+fn recover_steam_route() -> Result<(), String> {
+    steam::recover_stale_route().map_err(|error| error.to_string())
+}
+
 #[cfg(target_os = "macos")]
 fn reveal_in_platform_file_manager(export_path: &PathBuf) -> Result<(), String> {
     let status = Command::new("open")
@@ -82,6 +87,7 @@ pub fn run() {
             stop_steam_capture,
             reset_setup,
             cancel_export,
+            recover_steam_route,
             reveal_export_in_file_manager,
         ])
         .run(tauri::generate_context!())
@@ -90,10 +96,15 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::reveal_export_in_file_manager;
+    use super::{recover_steam_route, reveal_export_in_file_manager};
 
     #[test]
     fn rejects_an_empty_export_path_without_launching_the_file_manager() {
         assert!(reveal_export_in_file_manager(String::new()).is_err());
+    }
+
+    #[test]
+    fn stale_steam_route_recovery_is_available_on_every_platform() {
+        assert!(recover_steam_route().is_ok());
     }
 }
