@@ -37,13 +37,15 @@ Le lien **Nouveau certificat ?** est disponible depuis l’écran proxy. Il rela
 
 ## Parcours Steam / Windows
 
-Le parcours **Steam** est disponible dans l’application Windows. Lors de la première utilisation, **Installer le certificat** ouvre le certificat DER local dans le visualiseur natif de Windows. Après confirmation de son installation, SwagEx prépare automatiquement la capture Steam.
+Le parcours **Steam** est disponible dans l’application Windows. Lors de la première utilisation, **Installer le certificat** ouvre le certificat DER local dans le visualiseur natif de Windows. Le certificat doit être placé dans **Autorités de certification racines de confiance**. SwagEx compare ensuite le certificat exact généré par l’application aux magasins racines de l’utilisateur et de l’ordinateur. L’écoute Steam ne peut pas démarrer tant que Windows ne confirme pas cette confiance ; supprimer le certificat fait automatiquement réapparaître l’écran d’installation.
 
 La version Windows demande les droits administrateur au lancement afin de pouvoir rediriger temporairement les domaines régionaux de Summoners War vers le proxy local. SwagEx délimite son propre bloc dans le fichier `hosts`, conserve toutes les autres lignes et retire sa redirection à l’arrêt de l’écoute, après la capture ou à la fermeture de l’application. Le certificat est mémorisé et l’écran d’installation est ignoré lors des utilisations suivantes.
 
 Le parcours Android reste présent dans le modèle technique, mais sa carte est masquée dans le sélecteur tant que sa compatibilité sur les appareils récents n’est pas validée.
 
 Le menu **SwagEx → Changer mon appareil de jeu…** ramène au choix de l’appareil sans régénérer ni supprimer le certificat existant.
+
+Depuis la version 0.3.0, l’identifiant distribué est neutre (`app.swagex.desktop`) et les données fonctionnelles résident dans un dossier simplement nommé `SwagEx`. Au premier lancement, l’application déplace automatiquement les certificats, réglages et JSON créés par les versions antérieures. La migration refuse tout écrasement et conserve la même autorité de certification afin de ne pas invalider un certificat déjà approuvé.
 
 Après capture, le nom du fichier JSON et son icône sont cliquables pour afficher le dossier correspondant dans Finder sur macOS ou l’Explorateur de fichiers sur Windows, puis **Quitter SwagEx** ferme l’application.
 

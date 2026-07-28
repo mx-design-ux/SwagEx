@@ -6,6 +6,7 @@ use crate::{
     protocol::decode_profile,
     setup::{self, SetupSettings},
     steam::SteamRouteState,
+    storage,
 };
 use flate2::read::{GzDecoder, ZlibDecoder};
 use http_body_util::BodyExt;
@@ -22,7 +23,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 
@@ -124,6 +125,7 @@ pub struct StatusSnapshot {
     pub port: Option<u16>,
     pub certificate_url: Option<String>,
     pub certificate_was_created: bool,
+    pub certificate_trusted: bool,
     pub export_path: Option<String>,
     pub profile_name: Option<String>,
 }
@@ -140,6 +142,7 @@ impl StatusSnapshot {
             port: None,
             certificate_url: None,
             certificate_was_created: false,
+            certificate_trusted: false,
             export_path: None,
             profile_name: None,
         }
@@ -363,7 +366,7 @@ fn local_ipv4() -> anyhow::Result<Ipv4Addr> {
 }
 
 fn app_data_directory(app: &AppHandle) -> anyhow::Result<PathBuf> {
-    Ok(app.path().app_data_dir()?)
+    storage::app_data_directory(app)
 }
 
 /// Keeps captured exports in SwagEx's private application-data directory.
@@ -430,6 +433,16 @@ async fn start_proxy(
     } else {
         ensure_certificate(&certificate_directory)?
     };
+    let certificate_trusted = if steam_mode {
+        crate::certificate::is_certificate_trusted(&certificate_directory)?
+    } else {
+        false
+    };
+    if steam_mode && !certificate_trusted {
+        anyhow::bail!(
+            "Windows n’a pas encore approuvé le certificat SwagEx dans les autorités racines de confiance."
+        );
+    }
     let certificate_was_created = certificate.was_created;
     let certificate_der = Arc::new(certificate.der);
     let certificate_profile = Arc::new(mobileconfig_profile(certificate_der.as_ref()));
@@ -530,6 +543,7 @@ async fn start_proxy(
         port: Some(port),
         certificate_url,
         certificate_was_created,
+        certificate_trusted,
         export_path: None,
         profile_name: None,
     };
@@ -683,23 +697,35 @@ pub fn start_windows_certificate_setup(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<StatusSnapshot, String> {
-    cancel_running_proxy(&state).map_err(|error| error.to_string())?;
-    let app_data = app_data_directory(&app).map_err(|error| error.to_string())?;
-    let settings = setup::read(&app_data).map_err(|error| error.to_string())?;
+    windows_certificate_setup_status(
+        &app,
+        &state,
+        "Installez le certificat SwagEx dans les autorités racines de confiance de Windows.",
+    )
+    .map_err(|error| error.to_string())
+}
+
+fn windows_certificate_setup_status(
+    app: &AppHandle,
+    state: &AppState,
+    message: &str,
+) -> anyhow::Result<StatusSnapshot> {
+    cancel_running_proxy(state)?;
+    let app_data = app_data_directory(app)?;
+    let settings = setup::read(&app_data)?;
     let certificate_directory = app_data.join("certificate");
     if (settings.certificate_setup_completed || settings.windows_certificate_setup_completed)
         && !certificate_directory.exists()
     {
-        return Err(
+        anyhow::bail!(
             "Le certificat SwagEx installé précédemment est introuvable. Aucune nouvelle autorité n’a été créée."
-                .into(),
         );
     }
-    let certificate =
-        ensure_certificate(&certificate_directory).map_err(|error| error.to_string())?;
+    let certificate = ensure_certificate(&certificate_directory)?;
+    let certificate_trusted = crate::certificate::is_certificate_trusted(&certificate_directory)?;
     let status = StatusSnapshot {
         phase: "windows_certificate_setup".into(),
-        message: "Installez le certificat SwagEx dans Windows.".into(),
+        message: message.into(),
         certificate_setup_completed: settings.certificate_setup_completed,
         windows_certificate_setup_completed: settings.windows_certificate_setup_completed,
         proxy_setup_completed: settings.proxy_setup_completed,
@@ -707,6 +733,7 @@ pub fn start_windows_certificate_setup(
         port: None,
         certificate_url: None,
         certificate_was_created: certificate.was_created,
+        certificate_trusted,
         export_path: None,
         profile_name: None,
     };
@@ -772,6 +799,26 @@ pub async fn complete_windows_certificate_setup(
 ) -> Result<StatusSnapshot, String> {
     let app_data = app_data_directory(&app).map_err(|error| error.to_string())?;
     let current = setup::read(&app_data).map_err(|error| error.to_string())?;
+    let certificate_directory = app_data.join("certificate");
+    let certificate_trusted = crate::certificate::is_certificate_trusted(&certificate_directory)
+        .map_err(|error| error.to_string())?;
+    if !certificate_trusted {
+        setup::write(
+            &app_data,
+            SetupSettings {
+                certificate_setup_completed: current.certificate_setup_completed,
+                windows_certificate_setup_completed: false,
+                proxy_setup_completed: current.proxy_setup_completed,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+        return windows_certificate_setup_status(
+            &app,
+            &state,
+            "Le certificat n’est pas encore approuvé. Terminez l’assistant Windows dans « Autorités de certification racines de confiance », puis réessayez.",
+        )
+        .map_err(|error| error.to_string());
+    }
     setup::write(
         &app_data,
         SetupSettings {
@@ -793,7 +840,33 @@ pub async fn start_steam_capture(
 ) -> Result<StatusSnapshot, String> {
     let settings = configured(&app).map_err(|error| error.to_string())?;
     if !settings.windows_certificate_setup_completed {
-        return Err("Installez d’abord le certificat SwagEx dans Windows.".into());
+        return windows_certificate_setup_status(
+            &app,
+            &state,
+            "Installez le certificat SwagEx dans les autorités racines de confiance de Windows.",
+        )
+        .map_err(|error| error.to_string());
+    }
+    let app_data = app_data_directory(&app).map_err(|error| error.to_string())?;
+    let certificate_directory = app_data.join("certificate");
+    if !crate::certificate::is_certificate_trusted(&certificate_directory)
+        .map_err(|error| error.to_string())?
+    {
+        setup::write(
+            &app_data,
+            SetupSettings {
+                certificate_setup_completed: settings.certificate_setup_completed,
+                windows_certificate_setup_completed: false,
+                proxy_setup_completed: settings.proxy_setup_completed,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+        return windows_certificate_setup_status(
+            &app,
+            &state,
+            "Windows ne fait plus confiance au certificat SwagEx. Réinstallez-le avant de poursuivre.",
+        )
+        .map_err(|error| error.to_string());
     }
     start_proxy(app, &state, true, "listening", false, true)
         .await

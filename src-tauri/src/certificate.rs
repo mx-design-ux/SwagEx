@@ -14,6 +14,80 @@ pub fn certificate_der_path(directory: &Path) -> std::path::PathBuf {
     directory.join(CERTIFICATE_DER_FILE)
 }
 
+#[cfg(target_os = "windows")]
+pub fn is_certificate_trusted(directory: &Path) -> anyhow::Result<bool> {
+    let der = fs::read(certificate_der_path(directory))?;
+    Ok(certificate_is_in_root_store(
+        &der,
+        windows_sys::Win32::Security::Cryptography::CERT_SYSTEM_STORE_CURRENT_USER,
+    )? || certificate_is_in_root_store(
+        &der,
+        windows_sys::Win32::Security::Cryptography::CERT_SYSTEM_STORE_LOCAL_MACHINE,
+    )?)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn is_certificate_trusted(_directory: &Path) -> anyhow::Result<bool> {
+    Ok(false)
+}
+
+#[cfg(target_os = "windows")]
+fn certificate_is_in_root_store(der: &[u8], store_location: u32) -> anyhow::Result<bool> {
+    use std::{ffi::c_void, iter, os::windows::ffi::OsStrExt, ptr};
+    use windows_sys::Win32::Security::Cryptography::{
+        CERT_STORE_OPEN_EXISTING_FLAG, CERT_STORE_PROV_SYSTEM_W, CERT_STORE_READONLY_FLAG,
+        CertCloseStore, CertEnumCertificatesInStore, CertFreeCertificateContext, CertOpenStore,
+        PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
+    };
+
+    let root_store_name = std::ffi::OsStr::new("ROOT")
+        .encode_wide()
+        .chain(iter::once(0))
+        .collect::<Vec<_>>();
+    let store = unsafe {
+        CertOpenStore(
+            CERT_STORE_PROV_SYSTEM_W,
+            X509_ASN_ENCODING | PKCS_7_ASN_ENCODING,
+            0,
+            store_location | CERT_STORE_OPEN_EXISTING_FLAG | CERT_STORE_READONLY_FLAG,
+            root_store_name.as_ptr().cast::<c_void>(),
+        )
+    };
+    if store.is_null() {
+        return Err(std::io::Error::last_os_error()).context(
+            "Windows n’a pas permis de vérifier le magasin des autorités racines de confiance",
+        );
+    }
+
+    let mut previous = ptr::null();
+    let mut found = false;
+    loop {
+        let current = unsafe { CertEnumCertificatesInStore(store, previous) };
+        if current.is_null() {
+            break;
+        }
+        previous = current;
+        let context = unsafe { &*current };
+        let encoded = unsafe {
+            std::slice::from_raw_parts(context.pbCertEncoded, context.cbCertEncoded as usize)
+        };
+        if encoded == der {
+            found = true;
+            unsafe {
+                CertFreeCertificateContext(current);
+            }
+            break;
+        }
+    }
+
+    let closed = unsafe { CertCloseStore(store, 0) };
+    if closed == 0 {
+        return Err(std::io::Error::last_os_error())
+            .context("Windows n’a pas pu terminer la vérification du certificat");
+    }
+    Ok(found)
+}
+
 #[cfg(unix)]
 fn restrict_private_key_permissions(path: &Path) -> anyhow::Result<()> {
     use std::os::unix::fs::PermissionsExt;

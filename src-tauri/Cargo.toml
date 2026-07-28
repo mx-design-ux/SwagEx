@@ -1,6 +1,6 @@
 [package]
 name = "swagex"
-version = "0.2.4"
+version = "0.3.0"
 description = "Export local d'un profil de compte en JSON"
 authors = ["SwagEx contributors"]
 edition = "2024"
@@ -43,4 +43,4 @@ tauri-plugin-process = "2.3.1"
 tauri-plugin-updater = "2.10.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }

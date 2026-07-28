@@ -4,6 +4,7 @@ mod protocol;
 mod proxy;
 mod setup;
 mod steam;
+mod storage;
 
 use std::path::PathBuf;
 
@@ -72,6 +73,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup(|app| {
+            storage::migrate_legacy_app_data(app.handle())?;
+            Ok(())
+        })
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             export_status,

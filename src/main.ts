@@ -28,6 +28,7 @@ type StatusSnapshot = {
   port?: number;
   certificateUrl?: string;
   certificateWasCreated: boolean;
+  certificateTrusted: boolean;
   exportPath?: string;
   profileName?: string;
 };
@@ -50,6 +51,7 @@ const elements = {
   certificateDownload: document.querySelector<HTMLButtonElement>("#certificate-download")!,
   certificateDone: document.querySelector<HTMLButtonElement>("#certificate-done")!,
   windowsCertificateAction: document.querySelector<HTMLButtonElement>("#windows-certificate-action")!,
+  windowsCertificateStatus: document.querySelector<HTMLElement>("#windows-certificate-status")!,
   proxyHost: document.querySelector<HTMLElement>("#proxy-host")!,
   proxyPort: document.querySelector<HTMLElement>("#proxy-port")!,
   proxyDone: document.querySelector<HTMLButtonElement>("#proxy-done")!,
@@ -215,7 +217,13 @@ function updateStatus(status: StatusSnapshot): void {
     status.phase === "windows_certificate_setup"
     || (status.phase === "idle" && selectedGameDevice() === "steam")
   ) {
-    if (status.windowsCertificateSetupCompleted) {
+    const needsAttention = status.phase === "windows_certificate_setup"
+      && !status.certificateTrusted
+      && !status.message.startsWith("Installez le certificat");
+    elements.windowsCertificateStatus.hidden = !needsAttention;
+    elements.windowsCertificateStatus.textContent = needsAttention ? status.message : "";
+
+    if (status.windowsCertificateSetupCompleted || status.certificateTrusted) {
       windowsCertificateWasOpened = false;
       elements.windowsCertificateAction.textContent = "Démarrer l’écoute";
     } else {
@@ -389,6 +397,7 @@ async function runAction(command: string, args?: Record<string, unknown>): Promi
     windowsCertificateSetupCompleted: false,
     proxySetupCompleted: false,
     certificateWasCreated: false,
+    certificateTrusted: false,
   });
   try {
     updateStatus(await invoke<StatusSnapshot>(command, args));
@@ -481,6 +490,11 @@ window.addEventListener("DOMContentLoaded", () => {
   elements.windowsCertificateAction.addEventListener("click", () => {
     if (latestStatus?.windowsCertificateSetupCompleted) {
       void runAction("start_steam_capture");
+      return;
+    }
+
+    if (latestStatus?.certificateTrusted) {
+      void runAction("complete_windows_certificate_setup");
       return;
     }
 

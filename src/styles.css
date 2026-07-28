@@ -281,9 +281,19 @@ button:disabled { cursor: wait; opacity: .48; }
   top: 252px;
   right: 86px;
   left: 324px;
-  row-gap: 30px;
+  row-gap: 22px;
 }
-.windows-certificate-steps li { font-size: 20px; line-height: 1.28; }
+.windows-certificate-steps li { font-size: 18px; line-height: 1.28; }
+.windows-certificate-status {
+  position: absolute;
+  right: 86px;
+  bottom: 124px;
+  left: 324px;
+  margin: 0;
+  color: var(--gold);
+  font-size: 15px;
+  line-height: 1.25;
+}
 .windows-certificate-screen .bottom-action { min-width: 234px; }
 
 .callout-layout {
