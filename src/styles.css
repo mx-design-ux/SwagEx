@@ -62,15 +62,15 @@ button:disabled { cursor: wait; opacity: .48; }
   display: block;
   width: 384px;
   height: 72px;
-  margin-top: -18px;
+  margin-top: -22px;
 }
 .splash-brand p {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   color: var(--cyan);
   font-family: var(--kalam);
-  font-size: 34px;
+  font-size: 36px;
   font-weight: 400;
-  line-height: 1;
+  line-height: 36px;
   white-space: nowrap;
 }
 .splash-loading {
@@ -87,81 +87,86 @@ button:disabled { cursor: wait; opacity: .48; }
 
 .app-header {
   position: absolute;
-  top: 33px;
+  top: 32px;
   right: 32px;
   left: 32px;
   z-index: 2;
   display: grid;
   grid-template-columns: 192px minmax(0, 1fr);
-  column-gap: 18px;
-  align-items: center;
+  column-gap: 16px;
+  align-items: start;
 }
-.brand-logo { display: block; width: 192px; height: 36px; }
+.brand-logo { display: block; width: 192px; height: 36px; margin-top: 6px; }
 .tagline {
-  max-width: 490px;
+  max-width: 488px;
   margin: 0;
-  color: var(--muted);
-  font-size: 18px;
-  line-height: 1.25;
+  color: rgb(255 255 255 / 30%);
+  font-size: 20px;
+  line-height: 24px;
 }
 
 .flow-screen { position: absolute; inset: 0; overflow: hidden; }
 .screen-title {
   position: absolute;
-  top: 144px;
+  top: 128px;
   right: 0;
   left: 0;
   margin: 0;
   color: var(--cyan);
   font-family: var(--kalam);
-  font-size: 34px;
+  font-size: 36px;
   font-weight: 400;
-  line-height: 1;
+  line-height: 36px;
   text-align: center;
 }
-.device-screen .screen-title { top: 126px; }
+.device-screen .screen-title { top: 128px; }
 .proxy-title { top: 128px; }
 
 .device-choice-layout {
   position: absolute;
-  top: 250px;
+  top: 252px;
   left: 50%;
   display: grid;
-  grid-template-columns: repeat(2, 180px);
-  gap: 30px;
+  grid-template-columns: repeat(3, 174px);
+  gap: 16px;
   transform: translateX(-50%);
 }
 .device-choice {
   display: grid;
-  width: 180px;
-  height: 230px;
+  width: 174px;
+  height: 232px;
   align-content: center;
   justify-items: center;
-  gap: 18px;
-  border: 2px solid #353535;
-  border-radius: 30px;
+  gap: 16px;
+  border: 2px solid rgb(255 255 255 / 10%);
+  border-radius: 32px;
   color: var(--gold);
   background: transparent;
   cursor: pointer;
   transition: border-color 200ms ease-in-out;
 }
 .device-choice:not(:disabled):hover { border-color: var(--gold); }
-.device-choice img { display: block; width: 76px; height: 76px; object-fit: contain; }
-.device-choice span { font-size: 22px; font-weight: 700; line-height: 1; }
-.device-choice:disabled { cursor: default; opacity: .46; }
-.android-choice { visibility: hidden; }
+.device-choice img { display: block; width: 64px; height: 64px; object-fit: contain; }
+.device-choice span { font-size: 20px; font-weight: 700; line-height: 24px; }
+.device-choice:disabled {
+  color: #fff;
+  cursor: not-allowed;
+  opacity: 1;
+}
+.device-choice:disabled img,
+.device-choice:disabled span { opacity: .1; }
 
 .bottom-action {
   position: absolute;
   bottom: 32px;
   left: 50%;
-  min-height: 55px;
+  min-height: 56px;
   margin: 0;
   padding: 0 26px;
   border-radius: 999px;
   cursor: pointer;
   transform: translateX(-50%);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -171,14 +176,13 @@ button:disabled { cursor: wait; opacity: .48; }
 
 .certificate-layout {
   position: absolute;
-  top: 168px;
-  right: 60px;
-  bottom: 105px;
+  top: 252px;
+  right: 84px;
   left: 60px;
   display: grid;
   grid-template-columns: 232px minmax(0, 1fr);
   column-gap: 32px;
-  align-items: center;
+  align-items: start;
 }
 .dynamic-qr {
   display: block;
@@ -208,20 +212,20 @@ button:disabled { cursor: wait; opacity: .48; }
 .step-list li {
   display: grid;
   min-width: 0;
-  grid-template-columns: 40px minmax(0, 1fr);
-  column-gap: 14px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  column-gap: 16px;
   align-items: center;
   counter-increment: step;
   font-size: 20px;
-  line-height: 1.28;
+  line-height: 24px;
   overflow-wrap: break-word;
 }
 .step-copy { min-width: 0; }
 .step-number {
   display: grid;
   box-sizing: border-box;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border: 2px solid var(--line);
   border-radius: 50%;
   color: #777;
@@ -234,34 +238,38 @@ button:disabled { cursor: wait; opacity: .48; }
   content: counter(step);
   transform: translateY(-1px);
 }
-.certificate-steps { row-gap: 16px; align-content: center; }
-.certificate-screen .bottom-action { min-width: 168px; }
+.certificate-steps { row-gap: 32px; align-content: start; }
+.certificate-screen .bottom-action {
+  left: 297px;
+  width: 167px;
+  transform: none;
+}
 .step-list strong { color: var(--gold); font-weight: 700; }
 .path-separator { color: rgb(255 255 255 / 30%); }
 
 .proxy-layout {
   position: absolute;
-  top: 248px;
-  right: 77px;
+  top: 252px;
+  right: 84px;
   left: 324px;
 }
 .screen-monkey { display: block; object-fit: contain; object-position: center; }
 .stage-monkey {
   position: absolute;
   top: 168px;
-  left: 89px;
+  left: 88px;
   width: 256px;
   height: 384px;
 }
 .windows-monkey {
   position: absolute;
   top: 168px;
-  left: 89px;
+  left: 88px;
   width: 256px;
   height: 384px;
 }
-.proxy-steps { row-gap: 26px; }
-.proxy-steps li { font-size: 20px; line-height: 1.28; }
+.proxy-steps { row-gap: 32px; }
+.proxy-steps li { font-size: 20px; line-height: 24px; }
 .proxy-values strong { color: var(--gold); font-weight: 700; white-space: nowrap; }
 .bottom-actions {
   position: absolute;
@@ -273,20 +281,20 @@ button:disabled { cursor: wait; opacity: .48; }
   gap: 16px;
 }
 .bottom-actions .bottom-action { position: static; transform: none; }
-.proxy-actions .secondary-action { min-width: 233px; }
-.proxy-actions .primary-action { min-width: 200px; }
+.proxy-actions .secondary-action { width: 232px; }
+.proxy-actions .primary-action { width: 198px; }
 
 .windows-certificate-steps {
   position: absolute;
   top: 252px;
-  right: 86px;
+  right: 84px;
   left: 324px;
-  row-gap: 22px;
+  row-gap: 32px;
 }
-.windows-certificate-steps li { font-size: 18px; line-height: 1.28; }
+.windows-certificate-steps li { font-size: 20px; line-height: 24px; }
 .windows-certificate-status {
   position: absolute;
-  right: 86px;
+  right: 84px;
   bottom: 124px;
   left: 324px;
   margin: 0;
@@ -294,21 +302,21 @@ button:disabled { cursor: wait; opacity: .48; }
   font-size: 15px;
   line-height: 1.25;
 }
-.windows-certificate-screen .bottom-action { min-width: 234px; }
+.windows-certificate-screen .bottom-action { width: 234px; }
 
 .callout-layout {
   position: absolute;
-  top: 248px;
-  right: 54px;
-  left: 324px;
+  top: 252px;
+  right: 84px;
+  left: 378px;
 }
 .callout-title {
   margin: 0;
   color: var(--cyan);
   font-family: var(--kalam);
-  font-size: 36px;
+  font-size: 32px;
   font-weight: 400;
-  line-height: 1.1;
+  line-height: 46px;
 }
 
 @keyframes content-appear {
@@ -323,21 +331,25 @@ button:disabled { cursor: wait; opacity: .48; }
 
 .export-layout {
   position: absolute;
-  top: 258px;
-  right: 54px;
-  left: 324px;
+  top: 252px;
+  right: 84px;
+  left: 378px;
 }
 .export-file {
   display: grid;
+  min-height: 64px;
   min-width: 0;
+  width: 100%;
+  grid-template-columns: 64px minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: center;
   justify-items: start;
-  gap: 10px;
   padding: 0;
   border: 0;
   color: #f7f7f7;
   background: transparent;
   cursor: pointer;
-  text-align: center;
+  text-align: left;
 }
 .export-icon {
   position: relative;
@@ -346,7 +358,7 @@ button:disabled { cursor: wait; opacity: .48; }
   height: 52px;
   border: 4px solid var(--gold);
   border-radius: 17px;
-  margin-left: 10px;
+  margin-left: 8px;
 }
 .export-icon::before {
   position: absolute;
@@ -374,20 +386,25 @@ button:disabled { cursor: wait; opacity: .48; }
   display: block;
   max-width: 270px;
   overflow: hidden;
-  font-size: 19px;
-  line-height: 1.2;
+  color: #e8e8e8;
+  font-size: 20px;
+  line-height: 24px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .export-reminder {
   max-width: 330px;
-  margin: 20px 0 0;
-  color: #a5a5a5;
-  font-size: 16px;
-  line-height: 1.35;
+  margin: 32px 0 0;
+  color: rgb(255 255 255 / 30%);
+  font-size: 20px;
+  line-height: 24px;
 }
-.waiting-screen .bottom-action,
-.json-screen .bottom-action { min-width: 190px; }
+.waiting-screen .bottom-action {
+  left: 285px;
+  width: 191px;
+  transform: none;
+}
+.json-screen .bottom-action { width: 190px; }
 
 .error-screen { display: grid; place-items: center; align-content: center; gap: 18px; padding: 0 70px; }
 .error-screen h1 { margin: 0; color: #f3f3f3; font-size: 25px; }

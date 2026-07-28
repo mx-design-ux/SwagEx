@@ -14,15 +14,15 @@
         <div class="splash-brand" aria-hidden="true">
           <img class="splash-monkey" src="/src/assets/ui/asset-monkey@2x.png" alt="" />
           <img class="splash-logo" src="/src/assets/ui/logo-swagex.svg" alt="" />
-          <p>Summoners War Exporter <span data-app-version>0.3.2</span></p>
+          <p>Summoners War Exporter</p>
         </div>
-        <p class="splash-loading">Chargement de SwagEx…</p>
+        <p class="splash-loading">Chargement de SwagEx <span data-app-version>0.3.3</span>…</p>
       </section>
 
       <section class="app-screen" id="app-screen" hidden>
         <header class="app-header">
           <img class="brand-logo" src="/src/assets/ui/logo-swagex.svg" alt="SwagEx" />
-          <p class="tagline">Summoners War Exporter <span data-app-version>0.3.2</span>. Votre appareil de jeu et votre ordinateur doivent être sur le même réseau local.</p>
+          <p class="tagline">Summoners War Exporter <span data-app-version>0.3.3</span>. Votre appareil de jeu et votre ordinateur doivent être sur le même réseau local.</p>
         </header>
 
         <section class="flow-screen device-screen" id="device-screen" data-screen="device" hidden aria-labelledby="device-title">
@@ -36,8 +36,9 @@
               <img src="/src/assets/ui/steam.svg" alt="" aria-hidden="true" />
               <span>Steam</span>
             </button>
-            <button class="device-choice android-choice" id="choose-android" type="button" hidden aria-hidden="true" tabindex="-1">
-              <span>Android</span>
+            <button class="device-choice android-choice" id="choose-android" type="button" disabled aria-label="Android, bientôt disponible">
+              <img src="/src/assets/ui/android.svg" alt="" aria-hidden="true" />
+              <span>Soon</span>
             </button>
           </div>
         </section>
@@ -63,8 +64,8 @@
           <img class="screen-monkey windows-monkey" src="/src/assets/ui/asset-monkey@2x.png" alt="" aria-hidden="true" />
           <ol class="step-list windows-certificate-steps" aria-label="Instructions d’installation du certificat Windows">
             <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Cliquez sur <strong>Installer le certificat</strong></span></li>
-            <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Dans Windows, cliquez sur <strong>Installer un certificat…</strong> puis choisissez <strong>Ordinateur local</strong></span></li>
-            <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Placez-le dans <strong>Autorités de certification racines de confiance</strong>, terminez puis cliquez sur <strong>Oui</strong></span></li>
+            <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Dans la fenêtre Windows, cliquez sur <strong>Oui</strong></span></li>
+            <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Cet écran ne sera plus nécessaire à l’avenir</span></li>
           </ol>
           <p class="windows-certificate-status" id="windows-certificate-status" role="status" hidden></p>
           <button class="bottom-action primary-action" id="windows-certificate-action" type="button">Installer le certificat</button>
@@ -104,7 +105,7 @@
               <span class="export-icon" aria-hidden="true"></span>
               <span id="export-name">Compte.json</span>
             </button>
-            <p class="export-reminder">Vous pouvez désactiver le proxy dans les paramètres Wi‑Fi de l’appareil.</p>
+            <p class="export-reminder">Vous pouvez désactiver le proxy dans les paramètres Wi‑Fi de l’appareil. Bon jeu&nbsp;!</p>
           </div>
           <button class="bottom-action secondary-action" id="quit-app" type="button">Quitter SwagEx</button>
           <h1 id="json-title" class="visually-hidden">Export JSON terminé</h1>

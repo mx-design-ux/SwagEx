@@ -41,7 +41,7 @@ Le parcours **Steam** est disponible dans l’application Windows. Lors de la pr
 
 La version Windows demande les droits administrateur au lancement afin de pouvoir rediriger temporairement les domaines régionaux de Summoners War vers le proxy local. SwagEx délimite son propre bloc dans le fichier `hosts`, conserve toutes les autres lignes et retire sa redirection à l’arrêt de l’écoute, après la capture ou à la fermeture de l’application. Le certificat est mémorisé et l’écran d’installation est ignoré lors des utilisations suivantes.
 
-Le parcours Android reste présent dans le modèle technique, mais sa carte est masquée dans le sélecteur tant que sa compatibilité sur les appareils récents n’est pas validée.
+Le parcours Android reste présent dans le modèle technique. Sa carte est visible mais désactivée avec la mention **Soon** tant que sa compatibilité sur les appareils récents n’est pas validée.
 
 Le menu **SwagEx → Changer mon appareil de jeu…** ramène au choix de l’appareil sans régénérer ni supprimer le certificat existant.
 
@@ -50,6 +50,8 @@ Depuis la version 0.3.0, l’identifiant distribué est neutre (`app.swagex.desk
 Depuis la version 0.3.1, l’écran d’attente n’apparaît qu’après une courte fenêtre de stabilisation du proxy. Le texte d’attente et le fichier JSON final apparaissent avec une transition d’opacité de 200 ms.
 
 Depuis la version 0.3.2, cette transition d’opacité dure une seconde afin de rester perceptible. L’écran final rappelle également que le proxy Wi‑Fi peut être désactivé après la création du JSON.
+
+Depuis la version 0.3.3, les sept écrans du parcours suivent les mesures du document Sketch de référence : grille du sélecteur, étapes, boutons, alignement commun des textes d’attente et d’export, splash versionné et carte Android désactivée.
 
 Après capture, le nom du fichier JSON et son icône sont cliquables pour afficher le dossier correspondant dans Finder sur macOS ou l’Explorateur de fichiers sur Windows, puis **Quitter SwagEx** ferme l’application.
 
