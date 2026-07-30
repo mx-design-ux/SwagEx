@@ -721,12 +721,17 @@ pub fn start_windows_certificate_setup(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<StatusSnapshot, String> {
-    windows_certificate_setup_status(
+    let status = windows_certificate_setup_status(
         &app,
         &state,
         "Installez le certificat SwagEx dans les autorités racines de confiance de Windows.",
     )
-    .map_err(|error| error.to_string())
+    .map_err(|error| error.to_string())?;
+
+    #[cfg(target_os = "windows")]
+    open_windows_certificate(app)?;
+
+    Ok(status)
 }
 
 fn windows_certificate_setup_status(

@@ -79,7 +79,6 @@ let pollTimer: number | undefined;
 let actionInProgress = false;
 let availableUpdate: Update | null = null;
 let updateInProgress = false;
-let windowsCertificateWasOpened = false;
 
 async function renderAppVersion(): Promise<void> {
   const version = await getVersion();
@@ -112,8 +111,7 @@ function selectedGameDevice(): GameDevice | null {
 
 function showGameDeviceChoice(): void {
   stopPolling();
-  windowsCertificateWasOpened = false;
-  elements.windowsCertificateAction.textContent = "Installer le certificat";
+  elements.windowsCertificateAction.textContent = "J’ai terminé !";
   showScreen(elements.deviceScreen);
 }
 
@@ -224,12 +222,9 @@ function updateStatus(status: StatusSnapshot): void {
     elements.windowsCertificateStatus.textContent = needsAttention ? status.message : "";
 
     if (status.windowsCertificateSetupCompleted || status.certificateTrusted) {
-      windowsCertificateWasOpened = false;
       elements.windowsCertificateAction.textContent = "Démarrer l’écoute";
     } else {
-      elements.windowsCertificateAction.textContent = windowsCertificateWasOpened
-        ? "J’ai terminé !"
-        : "Installer le certificat";
+      elements.windowsCertificateAction.textContent = "J’ai terminé !";
     }
   }
 
@@ -492,33 +487,7 @@ window.addEventListener("DOMContentLoaded", () => {
       void runAction("start_steam_capture");
       return;
     }
-
-    if (latestStatus?.certificateTrusted) {
-      void runAction("complete_windows_certificate_setup");
-      return;
-    }
-
-    if (windowsCertificateWasOpened) {
-      void runAction("complete_windows_certificate_setup");
-      return;
-    }
-
-    if (actionInProgress) return;
-    actionInProgress = true;
-    elements.windowsCertificateAction.disabled = true;
-    void invoke("open_windows_certificate")
-      .then(() => {
-        windowsCertificateWasOpened = true;
-        elements.windowsCertificateAction.textContent = "J’ai terminé !";
-      })
-      .catch((error) => {
-        elements.errorMessage.textContent = String(error);
-        showScreen(elements.errorScreen);
-      })
-      .finally(() => {
-        actionInProgress = false;
-        elements.windowsCertificateAction.disabled = false;
-      });
+    void runAction("complete_windows_certificate_setup");
   });
   elements.certificateDownload.addEventListener("click", () => {
     if (latestStatus?.certificateUrl) void openUrl(latestStatus.certificateUrl);

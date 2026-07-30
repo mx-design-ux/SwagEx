@@ -198,7 +198,7 @@ button:disabled { cursor: wait; opacity: .48; }
 .certificate-layout {
   position: absolute;
   top: 252px;
-  right: 84px;
+  right: 32px;
   left: 60px;
   display: grid;
   grid-template-columns: 232px minmax(0, 1fr);
@@ -271,7 +271,7 @@ button:disabled { cursor: wait; opacity: .48; }
 .proxy-layout {
   position: absolute;
   top: 252px;
-  right: 84px;
+  right: 32px;
   left: 324px;
 }
 .screen-monkey,
@@ -314,14 +314,14 @@ button:disabled { cursor: wait; opacity: .48; }
 .windows-certificate-steps {
   position: absolute;
   top: 252px;
-  right: 84px;
+  right: 32px;
   left: 324px;
   row-gap: 32px;
 }
 .windows-certificate-steps li { font-size: 20px; line-height: 24px; }
 .windows-certificate-status {
   position: absolute;
-  right: 84px;
+  right: 32px;
   bottom: 124px;
   left: 324px;
   margin: 0;
@@ -334,7 +334,7 @@ button:disabled { cursor: wait; opacity: .48; }
 .callout-layout {
   position: absolute;
   top: 252px;
-  right: 84px;
+  right: 32px;
   left: 378px;
 }
 .callout-title {
@@ -375,7 +375,7 @@ button:disabled { cursor: wait; opacity: .48; }
 .export-layout {
   position: absolute;
   top: 252px;
-  right: 84px;
+  right: 32px;
   left: 378px;
 }
 .export-file {
