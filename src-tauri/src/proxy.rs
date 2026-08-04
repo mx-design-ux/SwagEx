@@ -3,7 +3,7 @@ use crate::{
         certificate_der_path, ensure_certificate, mobileconfig_profile, regenerate_certificate,
     },
     export::write_profile,
-    protocol::{decode_profile, decode_request},
+    protocol::decode_profile,
     setup::{self, SetupSettings},
     siege::{SiegeCapture, SiegeProgress},
     steam::SteamRouteState,
@@ -135,7 +135,6 @@ pub struct StatusSnapshot {
     pub siege_matchup_captured: bool,
     pub siege_attack_log_captured: bool,
     pub siege_defense_log_captured: bool,
-    pub siege_defense_list_captured: bool,
 }
 
 impl StatusSnapshot {
@@ -156,7 +155,6 @@ impl StatusSnapshot {
             siege_matchup_captured: false,
             siege_attack_log_captured: false,
             siege_defense_log_captured: false,
-            siege_defense_list_captured: false,
         }
     }
 }
@@ -190,8 +188,7 @@ impl SharedState {
         status.siege_matchup_captured = progress.matchup_captured;
         status.siege_attack_log_captured = progress.attack_log_captured;
         status.siege_defense_log_captured = progress.defense_log_captured;
-        status.siege_defense_list_captured = progress.defense_list_captured;
-        status.message = "Suivez les quatre étapes dans Summoners War.".into();
+        status.message = "Suivez les trois étapes dans Summoners War.".into();
     }
 
     fn record_proxy_error(&self, error: impl std::fmt::Display) {
@@ -243,7 +240,6 @@ impl Drop for AppState {
 struct CaptureHandler {
     capture_mode: CaptureMode,
     is_profile_request: bool,
-    pending_request: Option<Value>,
     certificate_der: Arc<Vec<u8>>,
     certificate_profile: Arc<Vec<u8>>,
     output_directory: Arc<PathBuf>,
@@ -295,22 +291,7 @@ impl HttpHandler for CaptureHandler {
         }
 
         self.is_profile_request = request.uri().path() == PROFILE_PATH;
-        self.pending_request = None;
-        if self.capture_mode != CaptureMode::Siege || !self.is_profile_request {
-            return request.into();
-        }
-
-        let (parts, body) = request.into_parts();
-        let collected = match body.collect().await {
-            Ok(collected) => collected.to_bytes(),
-            Err(_) => return Request::from_parts(parts, Body::empty()).into(),
-        };
-        let forwarded_body = collected.clone();
-        let capture_body =
-            decode_http_body(&parts.headers, &collected).unwrap_or_else(|| collected.to_vec());
-        self.pending_request = decode_request(&capture_body).ok();
-
-        Request::from_parts(parts, Body::from(forwarded_body)).into()
+        request.into()
     }
 
     async fn handle_response(
@@ -331,47 +312,48 @@ impl HttpHandler for CaptureHandler {
         let capture_body =
             decode_http_body(&parts.headers, &collected).unwrap_or_else(|| collected.to_vec());
 
-        let decoded_response = decode_profile(&capture_body).ok();
-        match (self.capture_mode, decoded_response) {
-            (CaptureMode::Account, Some(profile)) => {
+        match self.capture_mode {
+            CaptureMode::Account => {
                 let output_directory = Arc::clone(&self.output_directory);
-                let result = tokio::task::spawn_blocking(move || {
+                let shared = Arc::clone(&self.shared);
+                let cancel = self.cancel.clone();
+                tokio::task::spawn_blocking(move || {
+                    let profile = decode_profile(&capture_body).ok()?;
                     let command = profile.get("command").and_then(Value::as_str)?;
                     if !matches!(command, "HubUserLogin" | "GuestLogin") {
                         return None;
                     }
-                    Some(write_profile(&profile, &output_directory))
-                })
-                .await;
-
-                if let Ok(Some(Ok(exported))) = result {
-                    self.shared
-                        .record_export(exported.path, exported.display_name);
-                    schedule_proxy_stop(self.cancel.clone());
-                }
-            }
-            (CaptureMode::Siege, Some(response)) => {
-                let request = self.pending_request.take().unwrap_or(Value::Null);
-                let progress_and_export = self.siege_capture.lock().ok().map(|mut capture| {
-                    let progress = capture.observe(&request, &response);
-                    let siege_directory = self.output_directory.join("sieges");
-                    let exported = capture.write_if_complete(&siege_directory);
-                    (progress, exported)
+                    let exported = write_profile(&profile, &output_directory).ok()?;
+                    shared.record_export(exported.path, exported.display_name);
+                    schedule_proxy_stop(cancel);
+                    Some(())
                 });
-                if let Some((progress, exported)) = progress_and_export {
-                    self.shared.record_siege_progress(progress);
+            }
+            CaptureMode::Siege => {
+                let siege_capture = Arc::clone(&self.siege_capture);
+                let siege_directory = self.output_directory.join("sieges");
+                let shared = Arc::clone(&self.shared);
+                let cancel = self.cancel.clone();
+                tokio::task::spawn_blocking(move || {
+                    let response = decode_profile(&capture_body).ok()?;
+                    let mut capture = siege_capture.lock().ok()?;
+                    let progress = capture.observe(&response);
+                    let exported = capture.write_if_complete(&siege_directory);
+                    drop(capture);
+
+                    shared.record_siege_progress(progress);
                     match exported {
                         Ok(Some(exported)) => {
-                            self.shared
-                                .record_export(exported.path, exported.display_name);
-                            schedule_proxy_stop(self.cancel.clone());
+                            shared.record_export(exported.path, exported.display_name);
+                            schedule_proxy_stop(cancel);
                         }
                         Ok(None) => {}
-                        Err(error) => self.shared.record_proxy_error(error),
+                        Err(error) => shared.record_proxy_error(error),
                     }
-                }
+                    Some(())
+                });
             }
-            _ => {}
+            CaptureMode::Disabled => {}
         }
 
         Response::from_parts(parts, Body::from(forwarded_body))
@@ -545,7 +527,6 @@ async fn start_proxy(
     let handler = CaptureHandler {
         capture_mode,
         is_profile_request: false,
-        pending_request: None,
         certificate_der,
         certificate_profile,
         output_directory: Arc::new(output_directory),
@@ -613,7 +594,7 @@ async fn start_proxy(
             }
             "listening" if steam_mode => "Lancez Summoners War depuis Steam.".into(),
             "listening" => "Ouvrez Summoners War sur l’appareil Apple configuré.".into(),
-            "siege_listening" => "Suivez les quatre étapes dans Summoners War.".into(),
+            "siege_listening" => "Suivez les trois étapes dans Summoners War.".into(),
             _ => "".into(),
         },
         certificate_setup_completed: settings.certificate_setup_completed,
@@ -629,7 +610,6 @@ async fn start_proxy(
         siege_matchup_captured: false,
         siege_attack_log_captured: false,
         siege_defense_log_captured: false,
-        siege_defense_list_captured: false,
     };
     if matches!(phase, "listening" | "siege_listening") {
         state.shared.replace(StatusSnapshot {
@@ -870,7 +850,6 @@ fn windows_certificate_setup_status(
         siege_matchup_captured: false,
         siege_attack_log_captured: false,
         siege_defense_log_captured: false,
-        siege_defense_list_captured: false,
     };
     state.shared.replace(status.clone());
     Ok(status)
@@ -985,7 +964,6 @@ fn export_choice_status(settings: SetupSettings) -> StatusSnapshot {
         siege_matchup_captured: false,
         siege_attack_log_captured: false,
         siege_defense_log_captured: false,
-        siege_defense_list_captured: false,
     }
 }
 

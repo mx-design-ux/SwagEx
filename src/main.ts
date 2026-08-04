@@ -36,7 +36,6 @@ type StatusSnapshot = {
   siegeMatchupCaptured: boolean;
   siegeAttackLogCaptured: boolean;
   siegeDefenseLogCaptured: boolean;
-  siegeDefenseListCaptured: boolean;
 };
 
 type GameDevice = "ios" | "steam" | "android";
@@ -70,7 +69,6 @@ const elements = {
   siegeMatchupStep: document.querySelector<HTMLElement>("[data-siege-step='matchup']")!,
   siegeAttackStep: document.querySelector<HTMLElement>("[data-siege-step='attack']")!,
   siegeDefenseStep: document.querySelector<HTMLElement>("[data-siege-step='defense']")!,
-  siegeDefenseListStep: document.querySelector<HTMLElement>("[data-siege-step='defense-list']")!,
   exportName: document.querySelector<HTMLElement>("#export-name")!,
   revealExport: document.querySelector<HTMLButtonElement>("#reveal-export")!,
   quitApp: document.querySelector<HTMLButtonElement>("#quit-app")!,
@@ -233,7 +231,6 @@ function updateStatus(status: StatusSnapshot): void {
   elements.siegeMatchupStep.classList.toggle("is-complete", status.siegeMatchupCaptured);
   elements.siegeAttackStep.classList.toggle("is-complete", status.siegeAttackLogCaptured);
   elements.siegeDefenseStep.classList.toggle("is-complete", status.siegeDefenseLogCaptured);
-  elements.siegeDefenseListStep.classList.toggle("is-complete", status.siegeDefenseListCaptured);
 
   const windowsExportChoice = selectedGameDevice() === "steam" && status.phase === "export_choice";
   elements.windowsCertificateAction.hidden = windowsExportChoice;
@@ -287,6 +284,23 @@ function closeUpdateDialog(): void {
   elements.updateInstall.disabled = false;
 }
 
+function cleanReleaseNote(value: string): string {
+  return value
+    .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .trim();
+}
+
+function releaseNoteSummary(markdown: string): string | null {
+  const firstSection = markdown.split(/^##\s+Télécharger\s+SwagEx\s*$/im)[0] ?? markdown;
+  const note = firstSection
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0 && !line.startsWith("#"));
+  return note ? cleanReleaseNote(note.replace(/^-\s+/, "")) : null;
+}
+
 function showUpdateMessage(title: string, message: string, canInstall: boolean): void {
   elements.updateTitle.textContent = title;
   elements.updateMessage.textContent = message;
@@ -320,11 +334,11 @@ async function installAvailableUpdate(): Promise<void> {
       }
     });
     await relaunch();
-  } catch (error) {
+  } catch {
     updateInProgress = false;
     elements.updateDismiss.disabled = false;
     elements.updateInstall.disabled = false;
-    elements.updateProgress.textContent = `La mise à jour a échoué : ${String(error)}`;
+    elements.updateProgress.textContent = "La mise à jour a échoué. Réessayez plus tard.";
   }
 }
 
@@ -340,15 +354,15 @@ async function checkForUpdates(manual: boolean): Promise<void> {
     }
 
     availableUpdate = update;
-    const notes = update.body?.trim();
+    const note = update.body ? releaseNoteSummary(update.body) : null;
     showUpdateMessage(
       `SwagEx ${update.version} est disponible`,
-      notes ? `Notes de version : ${notes}` : "Une nouvelle version est prête à être installée.",
+      note ?? "Une nouvelle version est prête à être installée.",
       true,
     );
-  } catch (error) {
+  } catch {
     if (manual) {
-      showUpdateMessage("Mise à jour indisponible", `Impossible de vérifier les mises à jour : ${String(error)}`, false);
+      showUpdateMessage("Mise à jour indisponible", "Impossible de vérifier les mises à jour. Réessayez plus tard.", false);
     }
   }
 }
@@ -422,7 +436,6 @@ async function runAction(command: string, args?: Record<string, unknown>): Promi
     siegeMatchupCaptured: false,
     siegeAttackLogCaptured: false,
     siegeDefenseLogCaptured: false,
-    siegeDefenseListCaptured: false,
   });
   try {
     updateStatus(await invoke<StatusSnapshot>(command, args));

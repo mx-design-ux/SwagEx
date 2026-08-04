@@ -16,13 +16,13 @@
           <img class="splash-logo" src="/src/assets/ui/logo-swagex.svg" alt="" />
           <p>Summoners War Exporter</p>
         </div>
-        <p class="splash-loading">Chargement de SwagEx <span data-app-version>0.4.0</span>…</p>
+        <p class="splash-loading">Chargement de SwagEx <span data-app-version>0.4.1</span>…</p>
       </section>
 
       <section class="app-screen" id="app-screen" hidden>
         <header class="app-header">
           <img class="brand-logo" src="/src/assets/ui/logo-swagex.svg" alt="SwagEx" />
-          <p class="tagline">SW Exporter <span data-app-version>0.4.0</span>. Votre appareil de jeu et votre ordinateur doivent être sur le même réseau local.</p>
+          <p class="tagline">SW Exporter <span data-app-version>0.4.1</span>. Votre appareil de jeu et votre ordinateur doivent être sur le même réseau local.</p>
         </header>
 
         <section class="flow-screen device-screen" id="device-screen" data-screen="device" hidden aria-labelledby="device-title">
@@ -108,10 +108,9 @@
           <h1 id="siege-title" class="screen-title">Export du siège</h1>
           <img class="screen-monkey stage-monkey" src="/src/assets/ui/asset-monkey@2x.png" alt="" aria-hidden="true" />
           <ol class="step-list siege-steps" aria-label="Progression de l’export du siège">
-            <li data-siege-step="matchup"><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez le siège en cours</span></li>
-            <li data-siege-step="attack"><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez Info <span class="path-separator">›</span> Attaques</span></li>
-            <li data-siege-step="defense"><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez Info <span class="path-separator">›</span> Défenses</span></li>
-            <li data-siege-step="defense-list"><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez votre QG et affichez les défenses</span></li>
+            <li data-siege-step="matchup"><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez le Combat d’occupation</span></li>
+            <li data-siege-step="attack"><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez l’onglet Infos</span></li>
+            <li data-siege-step="defense"><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez l’onglet Défense</span></li>
           </ol>
           <button class="bottom-action secondary-action" id="stop-siege-listening" type="button">Arrêter l’écoute</button>
         </section>
@@ -139,7 +138,7 @@
         <section class="update-dialog" id="update-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="update-title">
           <div class="update-card">
             <h2 id="update-title">Mise à jour de SwagEx</h2>
-            <p id="update-message">—</p>
+            <div class="update-message" id="update-message">—</div>
             <p class="update-progress" id="update-progress" hidden></p>
             <div class="update-actions">
               <button class="update-secondary" id="update-dismiss" type="button">Plus tard</button>

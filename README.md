@@ -59,7 +59,7 @@ Depuis la version 0.3.5, l’écran final utilise directement l’asset SVG du d
 
 Depuis la version 0.3.6, les blocs d’instructions mesurent 404 px et le parcours Steam ouvre automatiquement le certificat Windows. L’unique action SwagEx de cet écran, **J’ai terminé !**, vérifie ensuite que le certificat est réellement approuvé avant de démarrer l’écoute.
 
-Depuis la version 0.4.0, l’écran de configuration propose directement **Compte** comme action principale et **Siège** comme action secondaire. L’export Compte conserve son fonctionnement et sa compatibilité existants. L’export Siège guide successivement l’ouverture du siège, des attaques, des défenses puis des défenses du QG. Il écrit un fichier séparé nommé `siege-JJMMAA.json` dans le dossier des exports de siège et arrête l’écoute uniquement lorsque les quatre informations attendues ont été capturées.
+Depuis la version 0.4.0, l’écran de configuration propose directement **Compte** comme action principale et **Siège** comme action secondaire. L’export Compte conserve son fonctionnement et sa compatibilité existants. L’export Siège guide successivement l’ouverture du Combat d’occupation, de l’onglet Infos puis de l’onglet Défense. Il écrit un fichier séparé nommé `siege-JJMMAA.json` dans le dossier des exports de siège et arrête l’écoute lorsque les trois informations attendues ont été capturées.
 
 Après capture, le nom du fichier JSON et son icône sont cliquables pour afficher le dossier correspondant dans Finder sur macOS ou l’Explorateur de fichiers sur Windows, puis **Quitter SwagEx** ferme l’application.
 

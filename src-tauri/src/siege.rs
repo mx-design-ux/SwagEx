@@ -6,23 +6,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const HEADQUARTER_BASE_NUMBERS: [i64; 3] = [1, 14, 27];
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SiegeProgress {
     pub matchup_captured: bool,
     pub attack_log_captured: bool,
     pub defense_log_captured: bool,
-    pub defense_list_captured: bool,
 }
 
 impl SiegeProgress {
     pub fn is_complete(self) -> bool {
-        self.matchup_captured
-            && self.attack_log_captured
-            && self.defense_log_captured
-            && self.defense_list_captured
+        self.matchup_captured && self.attack_log_captured && self.defense_log_captured
     }
 }
 
@@ -34,11 +28,9 @@ pub struct ExportedSiege {
 
 #[derive(Debug, Default)]
 pub struct SiegeCapture {
-    wizard_id: Option<Value>,
     matchup_info: Option<Value>,
     attack_log: Option<Value>,
     defense_log: Option<Value>,
-    defense_list: Option<Value>,
     exported: bool,
 }
 
@@ -48,46 +40,21 @@ impl SiegeCapture {
             matchup_captured: self.matchup_info.is_some(),
             attack_log_captured: self.attack_log.is_some(),
             defense_log_captured: self.defense_log.is_some(),
-            defense_list_captured: self.defense_list.is_some(),
         }
     }
 
-    pub fn observe(&mut self, request: &Value, response: &Value) -> SiegeProgress {
-        if let Some(wizard_id) = request.get("wizard_id") {
-            self.wizard_id = Some(wizard_id.clone());
-        }
-
-        let command = response
-            .get("command")
-            .and_then(Value::as_str)
-            .or_else(|| request.get("command").and_then(Value::as_str));
+    pub fn observe(&mut self, response: &Value) -> SiegeProgress {
+        let command = response.get("command").and_then(Value::as_str);
 
         match command {
             Some("GetGuildSiegeMatchupInfo") if response_ret_code_is_successful(response) => {
                 self.matchup_info = Some(response.clone());
             }
-            Some("GetGuildSiegeBattleLog") => {
-                match number_field(request, "log_type")
-                    .or_else(|| number_field(response, "log_type"))
-                {
-                    Some(1) => self.attack_log = Some(response.clone()),
-                    Some(2) => self.defense_log = Some(response.clone()),
-                    _ => {}
-                }
-            }
-            Some("GetGuildSiegeBaseDefenseUnitList" | "GetGuildSiegeBaseDefenseUnitListPreset") => {
-                let base_number = number_field(request, "base_number")
-                    .or_else(|| number_field(response, "base_number"));
-                if base_number.is_some_and(|number| HEADQUARTER_BASE_NUMBERS.contains(&number)) {
-                    let mut defense_list = response.clone();
-                    if let (Some(object), Some(base_number)) =
-                        (defense_list.as_object_mut(), base_number)
-                    {
-                        object.insert("hq_base_number".into(), Value::from(base_number));
-                    }
-                    self.defense_list = Some(defense_list);
-                }
-            }
+            Some("GetGuildSiegeBattleLog") => match number_field(response, "log_type") {
+                Some(1) => self.attack_log = Some(response.clone()),
+                Some(2) => self.defense_log = Some(response.clone()),
+                _ => {}
+            },
             _ => {}
         }
 
@@ -109,9 +76,6 @@ impl SiegeCapture {
         let temporary_path = output_directory.join(format!(".swagex-{safe_name}.tmp"));
 
         let mut document = Map::new();
-        if let Some(wizard_id) = &self.wizard_id {
-            document.insert("wizard_id".into(), wizard_id.clone());
-        }
         document.insert(
             "matchup_info".into(),
             self.matchup_info.clone().unwrap_or(Value::Null),
@@ -124,11 +88,6 @@ impl SiegeCapture {
             "defense_log".into(),
             self.defense_log.clone().unwrap_or(Value::Null),
         );
-        document.insert(
-            "defense_list".into(),
-            self.defense_list.clone().unwrap_or(Value::Null),
-        );
-
         fs::write(
             &temporary_path,
             serde_json::to_vec_pretty(&Value::Object(document))?,
@@ -181,33 +140,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn captures_the_four_historical_siege_steps_and_writes_a_dedicated_json() {
+    fn captures_the_three_siege_steps_and_writes_a_dedicated_json() {
         let mut capture = SiegeCapture::default();
-        let common_request = serde_json::json!({ "wizard_id": 42 });
 
-        capture.observe(
-            &common_request,
-            &serde_json::json!({
-                "command": "GetGuildSiegeMatchupInfo",
-                "ret_code": 0,
-                "match_info": { "match_id": 123456 }
-            }),
-        );
-        capture.observe(
-            &serde_json::json!({ "wizard_id": 42, "log_type": 1 }),
-            &serde_json::json!({ "command": "GetGuildSiegeBattleLog", "log_list": [] }),
-        );
-        capture.observe(
-            &serde_json::json!({ "wizard_id": 42, "log_type": 2 }),
-            &serde_json::json!({ "command": "GetGuildSiegeBattleLog", "log_list": [] }),
-        );
-        let progress = capture.observe(
-            &serde_json::json!({ "wizard_id": 42, "base_number": 14 }),
-            &serde_json::json!({
-                "command": "GetGuildSiegeBaseDefenseUnitList",
-                "defense_unit_list": []
-            }),
-        );
+        capture.observe(&serde_json::json!({
+            "command": "GetGuildSiegeMatchupInfo",
+            "ret_code": 0,
+            "match_info": { "match_id": 123456 }
+        }));
+        capture.observe(&serde_json::json!({
+            "command": "GetGuildSiegeBattleLog",
+            "log_type": 1,
+            "log_list": []
+        }));
+        let progress = capture.observe(&serde_json::json!({
+            "command": "GetGuildSiegeBattleLog",
+            "log_type": 2,
+            "log_list": []
+        }));
         assert!(progress.is_complete());
 
         let directory = tempfile::tempdir().unwrap();
@@ -219,9 +169,10 @@ mod tests {
         assert!(filename.starts_with("siege-"));
         assert!(filename.ends_with(".json"));
         let document: Value = serde_json::from_slice(&fs::read(exported.path).unwrap()).unwrap();
-        assert_eq!(document["wizard_id"], 42);
-        assert_eq!(document["defense_list"]["hq_base_number"], 14);
         assert_eq!(document["matchup_info"]["match_info"]["match_id"], 123456);
+        assert!(document["attack_log"].is_object());
+        assert!(document["defense_log"].is_object());
+        assert!(document.get("defense_list").is_none());
         assert!(
             capture
                 .write_if_complete(directory.path())
@@ -231,16 +182,13 @@ mod tests {
     }
 
     #[test]
-    fn ignores_a_non_headquarters_defense_list() {
+    fn ignores_a_defense_list_that_is_not_part_of_the_three_step_export() {
         let mut capture = SiegeCapture::default();
-        let progress = capture.observe(
-            &serde_json::json!({ "base_number": 5 }),
-            &serde_json::json!({
-                "command": "GetGuildSiegeBaseDefenseUnitListPreset"
-            }),
-        );
+        let progress = capture.observe(&serde_json::json!({
+            "command": "GetGuildSiegeBaseDefenseUnitListPreset"
+        }));
 
-        assert!(!progress.defense_list_captured);
+        assert_eq!(progress, SiegeProgress::default());
     }
 
     #[test]

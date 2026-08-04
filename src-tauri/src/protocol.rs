@@ -29,10 +29,6 @@ fn decrypt_payload(encoded_body: &[u8]) -> anyhow::Result<Vec<u8>> {
     Ok(decrypted.to_vec())
 }
 
-pub fn decode_request(encoded_body: &[u8]) -> anyhow::Result<Value> {
-    Ok(serde_json::from_slice(&decrypt_payload(encoded_body)?)?)
-}
-
 pub fn decode_profile(encoded_body: &[u8]) -> anyhow::Result<Value> {
     let decrypted = decrypt_payload(encoded_body)?;
 
@@ -90,18 +86,6 @@ mod tests {
             .encrypt_padded_mut::<Pkcs7>(&mut buffer, payload.len())
             .unwrap();
         STANDARD.encode(encrypted)
-    }
-
-    #[test]
-    fn decodes_a_game_request() {
-        let expected = serde_json::json!({
-            "command": "GetGuildSiegeBattleLog",
-            "wizard_id": 42,
-            "log_type": 1
-        });
-        let encoded = encrypt_payload(&serde_json::to_vec(&expected).unwrap());
-
-        assert_eq!(decode_request(encoded.as_bytes()).unwrap(), expected);
     }
 
     #[test]
