@@ -61,6 +61,12 @@ jobs:
           tagName: v__VERSION__
           releaseName: SwagEx v__VERSION__
           releaseBody: |
+            ## Nouveautés de la v0.4.0
+
+            - Choisissez directement **Compte** ou **Siège** après la configuration du proxy.
+            - Le parcours **Siège** guide les quatre consultations nécessaires et crée un JSON dédié nommé `siege-JJMMAA.json`.
+            - L’export **Compte** conserve son format et son fonctionnement existants.
+
             ## Télécharger SwagEx
 
             - [Mac récents · puce Apple](https://github.com/mx-design-ux/SwagEx/releases/download/v__VERSION__/SwagEx___VERSION___aarch64.dmg)

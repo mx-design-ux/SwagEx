@@ -3,8 +3,9 @@ use crate::{
         certificate_der_path, ensure_certificate, mobileconfig_profile, regenerate_certificate,
     },
     export::write_profile,
-    protocol::decode_profile,
+    protocol::{decode_profile, decode_request},
     setup::{self, SetupSettings},
+    siege::{SiegeCapture, SiegeProgress},
     steam::SteamRouteState,
     storage,
 };
@@ -17,6 +18,7 @@ use hudsucker::{
     rustls::crypto::aws_lc_rs,
 };
 use serde::Serialize;
+use serde_json::Value;
 use std::{
     io::Read,
     net::{IpAddr, Ipv4Addr, UdpSocket},
@@ -130,6 +132,10 @@ pub struct StatusSnapshot {
     pub certificate_trusted: bool,
     pub export_path: Option<String>,
     pub profile_name: Option<String>,
+    pub siege_matchup_captured: bool,
+    pub siege_attack_log_captured: bool,
+    pub siege_defense_log_captured: bool,
+    pub siege_defense_list_captured: bool,
 }
 
 impl StatusSnapshot {
@@ -147,6 +153,10 @@ impl StatusSnapshot {
             certificate_trusted: false,
             export_path: None,
             profile_name: None,
+            siege_matchup_captured: false,
+            siege_attack_log_captured: false,
+            siege_defense_log_captured: false,
+            siege_defense_list_captured: false,
         }
     }
 }
@@ -172,6 +182,18 @@ impl SharedState {
         status.profile_name = Some(display_name);
     }
 
+    fn record_siege_progress(&self, progress: SiegeProgress) {
+        let mut status = self.status.lock().expect("status mutex poisoned");
+        if status.phase != "siege_listening" {
+            return;
+        }
+        status.siege_matchup_captured = progress.matchup_captured;
+        status.siege_attack_log_captured = progress.attack_log_captured;
+        status.siege_defense_log_captured = progress.defense_log_captured;
+        status.siege_defense_list_captured = progress.defense_list_captured;
+        status.message = "Suivez les quatre étapes dans Summoners War.".into();
+    }
+
     fn record_proxy_error(&self, error: impl std::fmt::Display) {
         let mut status = self.status.lock().expect("status mutex poisoned");
         if status.phase != "captured" {
@@ -179,6 +201,13 @@ impl SharedState {
             status.message = format!("Le proxy s'est arrêté : {error}");
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CaptureMode {
+    Disabled,
+    Account,
+    Siege,
 }
 
 pub struct AppState {
@@ -212,12 +241,14 @@ impl Drop for AppState {
 
 #[derive(Clone)]
 struct CaptureHandler {
-    capture_enabled: bool,
+    capture_mode: CaptureMode,
     is_profile_request: bool,
+    pending_request: Option<Value>,
     certificate_der: Arc<Vec<u8>>,
     certificate_profile: Arc<Vec<u8>>,
     output_directory: Arc<PathBuf>,
     shared: Arc<SharedState>,
+    siege_capture: Arc<Mutex<SiegeCapture>>,
     cancel: CancellationToken,
 }
 
@@ -264,7 +295,22 @@ impl HttpHandler for CaptureHandler {
         }
 
         self.is_profile_request = request.uri().path() == PROFILE_PATH;
-        request.into()
+        self.pending_request = None;
+        if self.capture_mode != CaptureMode::Siege || !self.is_profile_request {
+            return request.into();
+        }
+
+        let (parts, body) = request.into_parts();
+        let collected = match body.collect().await {
+            Ok(collected) => collected.to_bytes(),
+            Err(_) => return Request::from_parts(parts, Body::empty()).into(),
+        };
+        let forwarded_body = collected.clone();
+        let capture_body =
+            decode_http_body(&parts.headers, &collected).unwrap_or_else(|| collected.to_vec());
+        self.pending_request = decode_request(&capture_body).ok();
+
+        Request::from_parts(parts, Body::from(forwarded_body)).into()
     }
 
     async fn handle_response(
@@ -272,7 +318,7 @@ impl HttpHandler for CaptureHandler {
         _context: &HttpContext,
         response: Response<Body>,
     ) -> Response<Body> {
-        if !self.capture_enabled || !self.is_profile_request {
+        if self.capture_mode == CaptureMode::Disabled || !self.is_profile_request {
             return response;
         }
 
@@ -285,25 +331,47 @@ impl HttpHandler for CaptureHandler {
         let capture_body =
             decode_http_body(&parts.headers, &collected).unwrap_or_else(|| collected.to_vec());
 
-        let output_directory = Arc::clone(&self.output_directory);
-        let result = tokio::task::spawn_blocking(move || {
-            let profile = decode_profile(&capture_body).ok()?;
-            let command = profile.get("command").and_then(serde_json::Value::as_str)?;
-            if !matches!(command, "HubUserLogin" | "GuestLogin") {
-                return None;
-            }
-            Some(write_profile(&profile, &output_directory))
-        })
-        .await;
+        let decoded_response = decode_profile(&capture_body).ok();
+        match (self.capture_mode, decoded_response) {
+            (CaptureMode::Account, Some(profile)) => {
+                let output_directory = Arc::clone(&self.output_directory);
+                let result = tokio::task::spawn_blocking(move || {
+                    let command = profile.get("command").and_then(Value::as_str)?;
+                    if !matches!(command, "HubUserLogin" | "GuestLogin") {
+                        return None;
+                    }
+                    Some(write_profile(&profile, &output_directory))
+                })
+                .await;
 
-        if let Ok(Some(Ok(exported))) = result {
-            self.shared
-                .record_export(exported.path, exported.display_name);
-            let cancel = self.cancel.clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
-                cancel.cancel();
-            });
+                if let Ok(Some(Ok(exported))) = result {
+                    self.shared
+                        .record_export(exported.path, exported.display_name);
+                    schedule_proxy_stop(self.cancel.clone());
+                }
+            }
+            (CaptureMode::Siege, Some(response)) => {
+                let request = self.pending_request.take().unwrap_or(Value::Null);
+                let progress_and_export = self.siege_capture.lock().ok().map(|mut capture| {
+                    let progress = capture.observe(&request, &response);
+                    let siege_directory = self.output_directory.join("sieges");
+                    let exported = capture.write_if_complete(&siege_directory);
+                    (progress, exported)
+                });
+                if let Some((progress, exported)) = progress_and_export {
+                    self.shared.record_siege_progress(progress);
+                    match exported {
+                        Ok(Some(exported)) => {
+                            self.shared
+                                .record_export(exported.path, exported.display_name);
+                            schedule_proxy_stop(self.cancel.clone());
+                        }
+                        Ok(None) => {}
+                        Err(error) => self.shared.record_proxy_error(error),
+                    }
+                }
+            }
+            _ => {}
         }
 
         Response::from_parts(parts, Body::from(forwarded_body))
@@ -327,6 +395,13 @@ impl HttpHandler for CaptureHandler {
     ) -> bool {
         client_hello.server_name().is_some_and(is_game_host)
     }
+}
+
+fn schedule_proxy_stop(cancel: CancellationToken) {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+        cancel.cancel();
+    });
 }
 
 fn is_game_host(host: &str) -> bool {
@@ -402,7 +477,7 @@ fn cancel_running_proxy(state: &AppState) -> anyhow::Result<()> {
 async fn start_proxy(
     app: AppHandle,
     state: &AppState,
-    capture_enabled: bool,
+    capture_mode: CaptureMode,
     phase: &str,
     force_regenerate_certificate: bool,
     steam_mode: bool,
@@ -468,12 +543,14 @@ async fn start_proxy(
     }
 
     let handler = CaptureHandler {
-        capture_enabled,
+        capture_mode,
         is_profile_request: false,
+        pending_request: None,
         certificate_der,
         certificate_profile,
         output_directory: Arc::new(output_directory),
         shared: Arc::clone(&state.shared),
+        siege_capture: Arc::new(Mutex::new(SiegeCapture::default())),
         cancel: cancel.clone(),
     };
     let authority = RcgenAuthority::new(certificate.issuer, 128, aws_lc_rs::default_provider());
@@ -536,6 +613,7 @@ async fn start_proxy(
             }
             "listening" if steam_mode => "Lancez Summoners War depuis Steam.".into(),
             "listening" => "Ouvrez Summoners War sur l’appareil Apple configuré.".into(),
+            "siege_listening" => "Suivez les quatre étapes dans Summoners War.".into(),
             _ => "".into(),
         },
         certificate_setup_completed: settings.certificate_setup_completed,
@@ -548,8 +626,12 @@ async fn start_proxy(
         certificate_trusted,
         export_path: None,
         profile_name: None,
+        siege_matchup_captured: false,
+        siege_attack_log_captured: false,
+        siege_defense_log_captured: false,
+        siege_defense_list_captured: false,
     };
-    if phase == "listening" {
+    if matches!(phase, "listening" | "siege_listening") {
         state.shared.replace(StatusSnapshot {
             phase: "proxy_setup".into(),
             message: "Démarrage de l’écoute…".into(),
@@ -581,7 +663,7 @@ async fn start_proxy(
         });
     }
 
-    if phase == "listening" {
+    if matches!(phase, "listening" | "siege_listening") {
         // Binding the socket makes the port available, but the newly spawned
         // proxy task still needs to be polled before it can accept the game's
         // first connection. Do not expose the waiting screen until that task
@@ -629,23 +711,29 @@ pub async fn start_certificate_setup(
         )
         .map_err(|error| error.to_string())?;
     }
-    start_proxy(app, &state, false, "certificate_setup", regenerate, false)
-        .await
-        .map_err(|error| {
-            let message = error.to_string();
-            let settings = state.shared.snapshot();
-            state.shared.replace(StatusSnapshot {
-                phase: "error".into(),
-                message: message.clone(),
-                ..StatusSnapshot::idle(SetupSettings {
-                    certificate_setup_completed: settings.certificate_setup_completed,
-                    windows_certificate_setup_completed: settings
-                        .windows_certificate_setup_completed,
-                    proxy_setup_completed: settings.proxy_setup_completed,
-                })
-            });
-            message
-        })
+    start_proxy(
+        app,
+        &state,
+        CaptureMode::Disabled,
+        "certificate_setup",
+        regenerate,
+        false,
+    )
+    .await
+    .map_err(|error| {
+        let message = error.to_string();
+        let settings = state.shared.snapshot();
+        state.shared.replace(StatusSnapshot {
+            phase: "error".into(),
+            message: message.clone(),
+            ..StatusSnapshot::idle(SetupSettings {
+                certificate_setup_completed: settings.certificate_setup_completed,
+                windows_certificate_setup_completed: settings.windows_certificate_setup_completed,
+                proxy_setup_completed: settings.proxy_setup_completed,
+            })
+        });
+        message
+    })
 }
 
 #[tauri::command]
@@ -658,17 +746,24 @@ pub async fn start_proxy_setup(
         return Err("Installez d’abord le certificat SwagEx sur votre appareil Apple.".into());
     }
 
-    start_proxy(app, &state, false, "proxy_setup", false, false)
-        .await
-        .map_err(|error| {
-            let message = error.to_string();
-            state.shared.replace(StatusSnapshot {
-                phase: "error".into(),
-                message: message.clone(),
-                ..StatusSnapshot::idle(settings)
-            });
-            message
-        })
+    start_proxy(
+        app,
+        &state,
+        CaptureMode::Disabled,
+        "proxy_setup",
+        false,
+        false,
+    )
+    .await
+    .map_err(|error| {
+        let message = error.to_string();
+        state.shared.replace(StatusSnapshot {
+            phase: "error".into(),
+            message: message.clone(),
+            ..StatusSnapshot::idle(settings)
+        });
+        message
+    })
 }
 
 #[tauri::command]
@@ -687,9 +782,16 @@ pub async fn complete_certificate_setup(
         },
     )
     .map_err(|error| error.to_string())?;
-    start_proxy(app, &state, false, "proxy_setup", false, false)
-        .await
-        .map_err(|error| error.to_string())
+    start_proxy(
+        app,
+        &state,
+        CaptureMode::Disabled,
+        "proxy_setup",
+        false,
+        false,
+    )
+    .await
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -711,7 +813,7 @@ pub async fn complete_proxy_setup(
         },
     )
     .map_err(|error| error.to_string())?;
-    start_proxy(app, &state, true, "listening", false, false)
+    start_proxy(app, &state, CaptureMode::Account, "listening", false, false)
         .await
         .map_err(|error| error.to_string())
 }
@@ -765,6 +867,10 @@ fn windows_certificate_setup_status(
         certificate_trusted,
         export_path: None,
         profile_name: None,
+        siege_matchup_captured: false,
+        siege_attack_log_captured: false,
+        siege_defense_log_captured: false,
+        siege_defense_list_captured: false,
     };
     state.shared.replace(status.clone());
     Ok(status)
@@ -857,16 +963,38 @@ pub async fn complete_windows_certificate_setup(
         },
     )
     .map_err(|error| error.to_string())?;
-    start_proxy(app, &state, true, "listening", false, true)
-        .await
-        .map_err(|error| error.to_string())
+    let status = export_choice_status(setup::read(&app_data).map_err(|error| error.to_string())?);
+    state.shared.replace(status.clone());
+    Ok(status)
+}
+
+fn export_choice_status(settings: SetupSettings) -> StatusSnapshot {
+    StatusSnapshot {
+        phase: "export_choice".into(),
+        message: "Choisissez les données à exporter.".into(),
+        certificate_setup_completed: settings.certificate_setup_completed,
+        windows_certificate_setup_completed: settings.windows_certificate_setup_completed,
+        proxy_setup_completed: settings.proxy_setup_completed,
+        local_ip: None,
+        port: None,
+        certificate_url: None,
+        certificate_was_created: false,
+        certificate_trusted: settings.windows_certificate_setup_completed,
+        export_path: None,
+        profile_name: None,
+        siege_matchup_captured: false,
+        siege_attack_log_captured: false,
+        siege_defense_log_captured: false,
+        siege_defense_list_captured: false,
+    }
 }
 
 #[tauri::command]
-pub async fn start_steam_capture(
+pub fn prepare_steam_export_choice(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<StatusSnapshot, String> {
+    cancel_running_proxy(&state).map_err(|error| error.to_string())?;
     let settings = configured(&app).map_err(|error| error.to_string())?;
     if !settings.windows_certificate_setup_completed {
         return windows_certificate_setup_status(
@@ -876,17 +1004,18 @@ pub async fn start_steam_capture(
         )
         .map_err(|error| error.to_string());
     }
-    let app_data = app_data_directory(&app).map_err(|error| error.to_string())?;
-    let certificate_directory = app_data.join("certificate");
+
+    let certificate_directory = app_data_directory(&app)
+        .map_err(|error| error.to_string())?
+        .join("certificate");
     if !crate::certificate::is_certificate_trusted(&certificate_directory)
         .map_err(|error| error.to_string())?
     {
         setup::write(
-            &app_data,
+            &app_data_directory(&app).map_err(|error| error.to_string())?,
             SetupSettings {
-                certificate_setup_completed: settings.certificate_setup_completed,
                 windows_certificate_setup_completed: false,
-                proxy_setup_completed: settings.proxy_setup_completed,
+                ..settings
             },
         )
         .map_err(|error| error.to_string())?;
@@ -897,9 +1026,87 @@ pub async fn start_steam_capture(
         )
         .map_err(|error| error.to_string());
     }
-    start_proxy(app, &state, true, "listening", false, true)
+
+    let status = export_choice_status(settings);
+    state.shared.replace(status.clone());
+    Ok(status)
+}
+
+async fn start_capture_mode(
+    app: AppHandle,
+    state: &AppState,
+    capture_mode: CaptureMode,
+    steam_mode: bool,
+) -> Result<StatusSnapshot, String> {
+    let app_data = app_data_directory(&app).map_err(|error| error.to_string())?;
+    let settings = setup::read(&app_data).map_err(|error| error.to_string())?;
+
+    if steam_mode {
+        if !settings.windows_certificate_setup_completed {
+            return Err("Installez d’abord le certificat SwagEx sous Windows.".into());
+        }
+        let certificate_directory = app_data.join("certificate");
+        if !crate::certificate::is_certificate_trusted(&certificate_directory)
+            .map_err(|error| error.to_string())?
+        {
+            setup::write(
+                &app_data,
+                SetupSettings {
+                    windows_certificate_setup_completed: false,
+                    ..settings
+                },
+            )
+            .map_err(|error| error.to_string())?;
+            return Err("Windows ne fait plus confiance au certificat SwagEx.".into());
+        }
+    } else {
+        if !settings.certificate_setup_completed {
+            return Err("Installez d’abord le certificat SwagEx sur votre appareil Apple.".into());
+        }
+        setup::write(
+            &app_data,
+            SetupSettings {
+                proxy_setup_completed: true,
+                ..settings
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    }
+
+    let phase = match capture_mode {
+        CaptureMode::Account => "listening",
+        CaptureMode::Siege => "siege_listening",
+        CaptureMode::Disabled => return Err("Mode d’export indisponible.".into()),
+    };
+    start_proxy(app, state, capture_mode, phase, false, steam_mode)
         .await
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn start_account_capture(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    steam_mode: bool,
+) -> Result<StatusSnapshot, String> {
+    start_capture_mode(app, &state, CaptureMode::Account, steam_mode).await
+}
+
+#[tauri::command]
+pub async fn start_siege_capture(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    steam_mode: bool,
+) -> Result<StatusSnapshot, String> {
+    start_capture_mode(app, &state, CaptureMode::Siege, steam_mode).await
+}
+
+#[tauri::command]
+pub async fn start_steam_capture(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StatusSnapshot, String> {
+    start_capture_mode(app, &state, CaptureMode::Account, true).await
 }
 
 #[tauri::command]
@@ -909,7 +1116,11 @@ pub fn cancel_steam_export(
 ) -> Result<StatusSnapshot, String> {
     cancel_running_proxy(&state).map_err(|error| error.to_string())?;
     let settings = configured(&app).map_err(|error| error.to_string())?;
-    let status = StatusSnapshot::idle(settings);
+    let status = if settings.windows_certificate_setup_completed {
+        export_choice_status(settings)
+    } else {
+        StatusSnapshot::idle(settings)
+    };
     state.shared.replace(status.clone());
     Ok(status)
 }
@@ -927,9 +1138,16 @@ pub async fn cancel_export(
     cancel_running_proxy(&state).map_err(|error| error.to_string())?;
     let settings = configured(&app).map_err(|error| error.to_string())?;
     if settings.certificate_setup_completed {
-        start_proxy(app, &state, false, "proxy_setup", false, false)
-            .await
-            .map_err(|error| error.to_string())
+        start_proxy(
+            app,
+            &state,
+            CaptureMode::Disabled,
+            "proxy_setup",
+            false,
+            false,
+        )
+        .await
+        .map_err(|error| error.to_string())
     } else {
         let status = StatusSnapshot::idle(settings);
         state.shared.replace(status.clone());

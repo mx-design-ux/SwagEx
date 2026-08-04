@@ -13,8 +13,10 @@ type Phase =
   | "idle"
   | "certificate_setup"
   | "windows_certificate_setup"
+  | "export_choice"
   | "proxy_setup"
   | "listening"
+  | "siege_listening"
   | "captured"
   | "error";
 
@@ -31,6 +33,10 @@ type StatusSnapshot = {
   certificateTrusted: boolean;
   exportPath?: string;
   profileName?: string;
+  siegeMatchupCaptured: boolean;
+  siegeAttackLogCaptured: boolean;
+  siegeDefenseLogCaptured: boolean;
+  siegeDefenseListCaptured: boolean;
 };
 
 type GameDevice = "ios" | "steam" | "android";
@@ -45,18 +51,26 @@ const elements = {
   windowsCertificateScreen: document.querySelector<HTMLElement>("#windows-certificate-screen")!,
   proxyScreen: document.querySelector<HTMLElement>("#proxy-screen")!,
   waitingScreen: document.querySelector<HTMLElement>("#waiting-screen")!,
+  siegeScreen: document.querySelector<HTMLElement>("#siege-screen")!,
   jsonScreen: document.querySelector<HTMLElement>("#json-screen")!,
   errorScreen: document.querySelector<HTMLElement>("#error-screen")!,
   certificateQr: document.querySelector<HTMLImageElement>("#certificate-qr")!,
   certificateDownload: document.querySelector<HTMLButtonElement>("#certificate-download")!,
   certificateDone: document.querySelector<HTMLButtonElement>("#certificate-done")!,
   windowsCertificateAction: document.querySelector<HTMLButtonElement>("#windows-certificate-action")!,
+  windowsCaptureActions: document.querySelector<HTMLElement>("#windows-capture-actions")!,
   windowsCertificateStatus: document.querySelector<HTMLElement>("#windows-certificate-status")!,
   proxyHost: document.querySelector<HTMLElement>("#proxy-host")!,
   proxyPort: document.querySelector<HTMLElement>("#proxy-port")!,
-  proxyDone: document.querySelector<HTMLButtonElement>("#proxy-done")!,
   regenerateCertificate: document.querySelector<HTMLButtonElement>("#regenerate-certificate")!,
   stopListening: document.querySelector<HTMLButtonElement>("#stop-listening")!,
+  stopSiegeListening: document.querySelector<HTMLButtonElement>("#stop-siege-listening")!,
+  captureAccount: Array.from(document.querySelectorAll<HTMLButtonElement>(".capture-account")),
+  captureSiege: Array.from(document.querySelectorAll<HTMLButtonElement>(".capture-siege")),
+  siegeMatchupStep: document.querySelector<HTMLElement>("[data-siege-step='matchup']")!,
+  siegeAttackStep: document.querySelector<HTMLElement>("[data-siege-step='attack']")!,
+  siegeDefenseStep: document.querySelector<HTMLElement>("[data-siege-step='defense']")!,
+  siegeDefenseListStep: document.querySelector<HTMLElement>("[data-siege-step='defense-list']")!,
   exportName: document.querySelector<HTMLElement>("#export-name")!,
   revealExport: document.querySelector<HTMLButtonElement>("#reveal-export")!,
   quitApp: document.querySelector<HTMLButtonElement>("#quit-app")!,
@@ -94,6 +108,7 @@ function showScreen(screen: HTMLElement): void {
     elements.windowsCertificateScreen,
     elements.proxyScreen,
     elements.waitingScreen,
+    elements.siegeScreen,
     elements.jsonScreen,
     elements.errorScreen,
   ]
@@ -137,7 +152,7 @@ async function selectAppleDevice(): Promise<void> {
 async function startSteamFlow(): Promise<void> {
   const status = await invoke<StatusSnapshot>("export_status");
   const next = status.windowsCertificateSetupCompleted
-    ? await invoke<StatusSnapshot>("start_steam_capture")
+    ? await invoke<StatusSnapshot>("prepare_steam_export_choice")
     : await invoke<StatusSnapshot>("start_windows_certificate_setup");
   updateStatus(next);
   beginPolling();
@@ -155,7 +170,7 @@ async function selectSteamDevice(): Promise<void> {
 
 async function changeGameDevice(): Promise<void> {
   stopPolling();
-  if (["certificate_setup", "windows_certificate_setup", "proxy_setup", "listening"].includes(latestStatus?.phase ?? "")) {
+  if (["certificate_setup", "windows_certificate_setup", "proxy_setup", "listening", "siege_listening"].includes(latestStatus?.phase ?? "")) {
     try {
       const command = selectedGameDevice() === "steam" ? "cancel_steam_export" : "cancel_export";
       latestStatus = await invoke<StatusSnapshot>(command);
@@ -175,6 +190,8 @@ function updateStatus(status: StatusSnapshot): void {
     showScreen(elements.certificateScreen);
   } else if (status.phase === "windows_certificate_setup") {
     showScreen(elements.windowsCertificateScreen);
+  } else if (status.phase === "export_choice") {
+    showScreen(elements.windowsCertificateScreen);
   } else if (status.phase === "proxy_setup" || status.phase === "idle") {
     if (selectedGameDevice() === "steam") {
       showScreen(elements.windowsCertificateScreen);
@@ -183,6 +200,8 @@ function updateStatus(status: StatusSnapshot): void {
     }
   } else if (status.phase === "listening") {
     showScreen(elements.waitingScreen);
+  } else if (status.phase === "siege_listening") {
+    showScreen(elements.siegeScreen);
   } else if (status.phase === "captured") {
     showScreen(elements.jsonScreen);
   } else {
@@ -211,8 +230,18 @@ function updateStatus(status: StatusSnapshot): void {
       : "Compte.json";
   }
 
+  elements.siegeMatchupStep.classList.toggle("is-complete", status.siegeMatchupCaptured);
+  elements.siegeAttackStep.classList.toggle("is-complete", status.siegeAttackLogCaptured);
+  elements.siegeDefenseStep.classList.toggle("is-complete", status.siegeDefenseLogCaptured);
+  elements.siegeDefenseListStep.classList.toggle("is-complete", status.siegeDefenseListCaptured);
+
+  const windowsExportChoice = selectedGameDevice() === "steam" && status.phase === "export_choice";
+  elements.windowsCertificateAction.hidden = windowsExportChoice;
+  elements.windowsCaptureActions.hidden = !windowsExportChoice;
+
   if (
     status.phase === "windows_certificate_setup"
+    || status.phase === "export_choice"
     || (status.phase === "idle" && selectedGameDevice() === "steam")
   ) {
     const needsAttention = status.phase === "windows_certificate_setup"
@@ -221,17 +250,14 @@ function updateStatus(status: StatusSnapshot): void {
     elements.windowsCertificateStatus.hidden = !needsAttention;
     elements.windowsCertificateStatus.textContent = needsAttention ? status.message : "";
 
-    if (status.windowsCertificateSetupCompleted || status.certificateTrusted) {
-      elements.windowsCertificateAction.textContent = "Démarrer l’écoute";
-    } else {
-      elements.windowsCertificateAction.textContent = "J’ai terminé !";
-    }
+    elements.windowsCertificateAction.textContent = "J’ai terminé !";
   }
 
   elements.certificateDone.disabled = actionInProgress;
   elements.windowsCertificateAction.disabled = actionInProgress;
-  elements.proxyDone.disabled = actionInProgress;
   elements.regenerateCertificate.disabled = actionInProgress;
+  elements.captureAccount.forEach((button) => { button.disabled = actionInProgress; });
+  elements.captureSiege.forEach((button) => { button.disabled = actionInProgress; });
 }
 
 async function refreshStatus(): Promise<void> {
@@ -393,6 +419,10 @@ async function runAction(command: string, args?: Record<string, unknown>): Promi
     proxySetupCompleted: false,
     certificateWasCreated: false,
     certificateTrusted: false,
+    siegeMatchupCaptured: false,
+    siegeAttackLogCaptured: false,
+    siegeDefenseLogCaptured: false,
+    siegeDefenseListCaptured: false,
   });
   try {
     updateStatus(await invoke<StatusSnapshot>(command, args));
@@ -418,8 +448,10 @@ async function showDevelopmentPreview(): Promise<boolean> {
     device: elements.deviceScreen,
     ios: elements.certificateScreen,
     windows: elements.windowsCertificateScreen,
+    "windows-choice": elements.windowsCertificateScreen,
     proxy: elements.proxyScreen,
     waiting: elements.waitingScreen,
+    siege: elements.siegeScreen,
     json: elements.jsonScreen,
   };
   const screen = previews[preview] ?? elements.deviceScreen;
@@ -427,6 +459,14 @@ async function showDevelopmentPreview(): Promise<boolean> {
   elements.proxyHost.textContent = "192.168.1.24";
   elements.proxyPort.textContent = "8080";
   elements.exportName.textContent = "Berserk~~65581.json";
+  if (preview === "windows-choice") {
+    elements.windowsCertificateAction.hidden = true;
+    elements.windowsCaptureActions.hidden = false;
+  }
+  if (screen === elements.siegeScreen) {
+    elements.siegeMatchupStep.classList.add("is-complete");
+    elements.siegeAttackStep.classList.add("is-complete");
+  }
   if (screen === elements.certificateScreen) {
     elements.certificateQr.src = await QRCode.toDataURL("http://192.168.1.24:8080/SwagEx.mobileconfig", {
       margin: 0,
@@ -471,10 +511,15 @@ window.addEventListener("DOMContentLoaded", () => {
   elements.certificateDone.addEventListener("click", () => {
     void runAction("complete_certificate_setup");
   });
-  elements.proxyDone.addEventListener("click", () => {
-    // Apple devices forget their manual proxy after each use, so this action is
-    // deliberately identical on every run and immediately starts capture.
-    void runAction("complete_proxy_setup");
+  const startCapture = (mode: "account" | "siege") => {
+    const command = mode === "account" ? "start_account_capture" : "start_siege_capture";
+    void runAction(command, { steamMode: selectedGameDevice() === "steam" });
+  };
+  elements.captureAccount.forEach((button) => {
+    button.addEventListener("click", () => { startCapture("account"); });
+  });
+  elements.captureSiege.forEach((button) => {
+    button.addEventListener("click", () => { startCapture("siege"); });
   });
   elements.regenerateCertificate.addEventListener("click", () => {
     void runAction("start_certificate_setup", { regenerate: true });
@@ -482,11 +527,10 @@ window.addEventListener("DOMContentLoaded", () => {
   elements.stopListening.addEventListener("click", () => {
     void runAction(selectedGameDevice() === "steam" ? "cancel_steam_export" : "cancel_export");
   });
+  elements.stopSiegeListening.addEventListener("click", () => {
+    void runAction(selectedGameDevice() === "steam" ? "cancel_steam_export" : "cancel_export");
+  });
   elements.windowsCertificateAction.addEventListener("click", () => {
-    if (latestStatus?.windowsCertificateSetupCompleted) {
-      void runAction("start_steam_capture");
-      return;
-    }
     void runAction("complete_windows_certificate_setup");
   });
   elements.certificateDownload.addEventListener("click", () => {

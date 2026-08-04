@@ -16,7 +16,7 @@ fn protocol_key() -> [u8; 16] {
     MASKED_PROTOCOL_KEY.map(|byte| byte ^ KEY_MASK)
 }
 
-pub fn decode_profile(encoded_body: &[u8]) -> anyhow::Result<Value> {
+fn decrypt_payload(encoded_body: &[u8]) -> anyhow::Result<Vec<u8>> {
     let encoded = std::str::from_utf8(encoded_body)?.trim();
     let mut encrypted = STANDARD.decode(encoded)?;
     let key = protocol_key();
@@ -24,9 +24,19 @@ pub fn decode_profile(encoded_body: &[u8]) -> anyhow::Result<Value> {
 
     let decrypted = Aes128CbcDecryptor::new(&key.into(), &iv.into())
         .decrypt_padded_mut::<Pkcs7>(&mut encrypted)
-        .map_err(|_| anyhow::anyhow!("impossible de déchiffrer la réponse du profil"))?;
+        .map_err(|_| anyhow::anyhow!("impossible de déchiffrer les données du jeu"))?;
 
-    let mut inflater = ZlibDecoder::new(decrypted);
+    Ok(decrypted.to_vec())
+}
+
+pub fn decode_request(encoded_body: &[u8]) -> anyhow::Result<Value> {
+    Ok(serde_json::from_slice(&decrypt_payload(encoded_body)?)?)
+}
+
+pub fn decode_profile(encoded_body: &[u8]) -> anyhow::Result<Value> {
+    let decrypted = decrypt_payload(encoded_body)?;
+
+    let mut inflater = ZlibDecoder::new(decrypted.as_slice());
     let mut json_bytes = Vec::new();
     inflater.read_to_end(&mut json_bytes)?;
 
@@ -71,6 +81,29 @@ mod tests {
 
     type Aes128CbcEncryptor = cbc::Encryptor<Aes128>;
 
+    fn encrypt_payload(payload: &[u8]) -> String {
+        let key = protocol_key();
+        let iv = [0_u8; 16];
+        let mut buffer = vec![0_u8; payload.len() + 16];
+        buffer[..payload.len()].copy_from_slice(payload);
+        let encrypted = Aes128CbcEncryptor::new(&key.into(), &iv.into())
+            .encrypt_padded_mut::<Pkcs7>(&mut buffer, payload.len())
+            .unwrap();
+        STANDARD.encode(encrypted)
+    }
+
+    #[test]
+    fn decodes_a_game_request() {
+        let expected = serde_json::json!({
+            "command": "GetGuildSiegeBattleLog",
+            "wizard_id": 42,
+            "log_type": 1
+        });
+        let encoded = encrypt_payload(&serde_json::to_vec(&expected).unwrap());
+
+        assert_eq!(decode_request(encoded.as_bytes()).unwrap(), expected);
+    }
+
     #[test]
     fn decodes_a_profile_response() {
         let expected = serde_json::json!({
@@ -85,14 +118,7 @@ mod tests {
         encoder.write_all(&serialized).unwrap();
         let compressed = encoder.finish().unwrap();
 
-        let key = protocol_key();
-        let iv = [0_u8; 16];
-        let mut buffer = vec![0_u8; compressed.len() + 16];
-        buffer[..compressed.len()].copy_from_slice(&compressed);
-        let encrypted = Aes128CbcEncryptor::new(&key.into(), &iv.into())
-            .encrypt_padded_mut::<Pkcs7>(&mut buffer, compressed.len())
-            .unwrap();
-        let encoded = STANDARD.encode(encrypted);
+        let encoded = encrypt_payload(&compressed);
 
         let decoded = decode_profile(encoded.as_bytes()).unwrap();
         assert_eq!(decoded, expected);

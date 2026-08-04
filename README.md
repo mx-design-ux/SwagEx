@@ -1,6 +1,6 @@
 # SwagEx
 
-SwagEx est un exporteur local minimal pour macOS et Windows. Sa seule fonction est de produire un fichier JSON du compte compatible avec les outils qui acceptent les exports SWEX.
+SwagEx est un exporteur local minimal pour macOS et Windows. Il produit un fichier JSON du compte compatible avec les outils qui acceptent les exports SWEX, ou un fichier JSON séparé pour le siège de guilde en cours.
 
 SwagEx ne contient aucun optimiseur, aucune logique SWAG, aucun plugin et aucun service distant. Le fichier JSON appartient à l’utilisateur et reste sur son ordinateur.
 
@@ -31,13 +31,13 @@ Au premier lancement, SwagEx demande l’appareil de jeu. Le parcours **iOS** co
 
 Après le téléchargement du profil, iOS impose encore deux actions manuelles : toucher **Installer** dans **Réglages → Profil téléchargé**, puis activer **SwagEx** dans **Réglages → Général → Informations → Réglages des certificats**. Cette confiance ne peut pas être activée automatiquement pour un certificat installé manuellement sur un appareil Apple non supervisé.
 
-Cet écran proxy est affiché à chaque ouverture et à chaque export, car iOS ne conserve pas la configuration manuelle du proxy. Le bouton **C’est configuré !** démarre immédiatement l’écoute ; l’utilisateur peut alors lancer Summoners War. Le certificat reste mémorisé et n’est pas régénéré à chaque export.
+Cet écran proxy est affiché à chaque ouverture et à chaque export, car iOS ne conserve pas la configuration manuelle du proxy. Une fois le proxy saisi, l’utilisateur choisit directement **Compte** ou **Siège**. **Compte** démarre l’écoute du profil comme auparavant. **Siège** ouvre le guide de capture dédié. Le certificat reste mémorisé et n’est pas régénéré à chaque export.
 
 Le lien **Nouveau certificat ?** est disponible depuis l’écran proxy. Il relance volontairement l’installation du certificat et doit être utilisé si le certificat a été supprimé ou si l’appareil Apple n’accorde plus sa confiance à l’ancien certificat. En dehors de cette action explicite, SwagEx ne remplace jamais silencieusement la CA : si ses fichiers persistants sont incomplets, l’application s’arrête avec une erreur au lieu de créer un nouveau certificat qui invaliderait celui déjà installé. Un certificat déjà installé conserve son nom existant ; cliquer sur ce lien génère le nouveau certificat nommé **SwagEx** et impose donc une réinstallation et une nouvelle activation de confiance.
 
 ## Parcours Steam / Windows
 
-Le parcours **Steam** est disponible dans l’application Windows. Lors de la première utilisation, sélectionner **Steam** ouvre automatiquement le certificat DER local dans le visualiseur natif de Windows. Dans l’assistant, cliquez sur **Installer le certificat**, choisissez **Ordinateur local**, puis **Placer tous les certificats dans le magasin suivant** et sélectionnez exactement **Autorités de certification racines de confiance**. Le bouton **J’ai terminé !** vérifie ensuite que Windows approuve bien le certificat généré par SwagEx. L’écoute Steam ne peut pas démarrer tant que cette confiance n’est pas confirmée ; supprimer le certificat fait automatiquement réapparaître l’écran d’installation.
+Le parcours **Steam** est disponible dans l’application Windows. Lors de la première utilisation, sélectionner **Steam** ouvre automatiquement le certificat DER local dans le visualiseur natif de Windows. Dans l’assistant, cliquez sur **Installer le certificat**, choisissez **Ordinateur local**, puis **Placer tous les certificats dans le magasin suivant** et sélectionnez exactement **Autorités de certification racines de confiance**. Le bouton **J’ai terminé !** vérifie ensuite que Windows approuve bien le certificat généré par SwagEx. Une fois cette confiance confirmée, les choix **Compte** et **Siège** apparaissent sur le même écran. Supprimer le certificat fait automatiquement réapparaître son installation.
 
 La version Windows demande les droits administrateur au lancement afin de pouvoir rediriger temporairement les domaines régionaux de Summoners War vers le proxy local. SwagEx délimite son propre bloc dans le fichier `hosts`, conserve toutes les autres lignes et retire sa redirection à l’arrêt de l’écoute, après la capture ou à la fermeture de l’application. Le certificat est mémorisé et l’écran d’installation est ignoré lors des utilisations suivantes.
 
@@ -58,6 +58,8 @@ Depuis la version 0.3.4, les boutons reprennent exactement le centrage et les é
 Depuis la version 0.3.5, l’écran final utilise directement l’asset SVG du document JSON, rendu exactement en 64 × 64 px.
 
 Depuis la version 0.3.6, les blocs d’instructions mesurent 404 px et le parcours Steam ouvre automatiquement le certificat Windows. L’unique action SwagEx de cet écran, **J’ai terminé !**, vérifie ensuite que le certificat est réellement approuvé avant de démarrer l’écoute.
+
+Depuis la version 0.4.0, l’écran de configuration propose directement **Compte** comme action principale et **Siège** comme action secondaire. L’export Compte conserve son fonctionnement et sa compatibilité existants. L’export Siège guide successivement l’ouverture du siège, des attaques, des défenses puis des défenses du QG. Il écrit un fichier séparé nommé `siege-JJMMAA.json` dans le dossier des exports de siège et arrête l’écoute uniquement lorsque les quatre informations attendues ont été capturées.
 
 Après capture, le nom du fichier JSON et son icône sont cliquables pour afficher le dossier correspondant dans Finder sur macOS ou l’Explorateur de fichiers sur Windows, puis **Quitter SwagEx** ferme l’application.
 

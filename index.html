@@ -16,13 +16,13 @@
           <img class="splash-logo" src="/src/assets/ui/logo-swagex.svg" alt="" />
           <p>Summoners War Exporter</p>
         </div>
-        <p class="splash-loading">Chargement de SwagEx <span data-app-version>0.3.6</span>…</p>
+        <p class="splash-loading">Chargement de SwagEx <span data-app-version>0.4.0</span>…</p>
       </section>
 
       <section class="app-screen" id="app-screen" hidden>
         <header class="app-header">
           <img class="brand-logo" src="/src/assets/ui/logo-swagex.svg" alt="SwagEx" />
-          <p class="tagline">SW Exporter <span data-app-version>0.3.6</span>. Votre appareil de jeu et votre ordinateur doivent être sur le même réseau local.</p>
+          <p class="tagline">SW Exporter <span data-app-version>0.4.0</span>. Votre appareil de jeu et votre ordinateur doivent être sur le même réseau local.</p>
         </header>
 
         <section class="flow-screen device-screen" id="device-screen" data-screen="device" hidden aria-labelledby="device-title">
@@ -70,6 +70,10 @@
           </ol>
           <p class="windows-certificate-status" id="windows-certificate-status" role="status" hidden></p>
           <button class="bottom-action primary-action" id="windows-certificate-action" type="button">J’ai terminé&nbsp;!</button>
+          <div class="bottom-actions windows-capture-actions" id="windows-capture-actions" hidden>
+            <button class="bottom-action primary-action capture-account" type="button">Compte</button>
+            <button class="bottom-action secondary-action capture-siege" type="button">Siège</button>
+          </div>
         </section>
 
         <section class="flow-screen proxy-screen" id="proxy-screen" data-screen="proxy" hidden aria-labelledby="proxy-title">
@@ -87,7 +91,8 @@
           </div>
           <div class="bottom-actions proxy-actions">
             <button class="bottom-action secondary-action" id="regenerate-certificate" type="button">Nouveau certificat&nbsp;?</button>
-            <button class="bottom-action primary-action" id="proxy-done" type="button">C’est configuré&nbsp;!</button>
+            <button class="bottom-action primary-action capture-account" type="button">Compte</button>
+            <button class="bottom-action secondary-action capture-siege" type="button">Siège</button>
           </div>
         </section>
 
@@ -97,6 +102,18 @@
             <h1 id="waiting-title" class="callout-title">Lance le jeu,<br />j’attends…</h1>
           </div>
           <button class="bottom-action secondary-action" id="stop-listening" type="button">Arrêter l’écoute</button>
+        </section>
+
+        <section class="flow-screen siege-screen" id="siege-screen" data-screen="siege" hidden aria-labelledby="siege-title">
+          <h1 id="siege-title" class="screen-title">Export du siège</h1>
+          <img class="screen-monkey stage-monkey" src="/src/assets/ui/asset-monkey@2x.png" alt="" aria-hidden="true" />
+          <ol class="step-list siege-steps" aria-label="Progression de l’export du siège">
+            <li data-siege-step="matchup"><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez le siège en cours</span></li>
+            <li data-siege-step="attack"><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez Info <span class="path-separator">›</span> Attaques</span></li>
+            <li data-siege-step="defense"><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez Info <span class="path-separator">›</span> Défenses</span></li>
+            <li data-siege-step="defense-list"><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez votre QG et affichez les défenses</span></li>
+          </ol>
+          <button class="bottom-action secondary-action" id="stop-siege-listening" type="button">Arrêter l’écoute</button>
         </section>
 
         <section class="flow-screen json-screen" id="json-screen" data-screen="json" hidden aria-labelledby="json-title">
