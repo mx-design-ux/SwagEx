@@ -17,10 +17,13 @@ jobs:
         include:
           - platform: macos-latest
             target: aarch64-apple-darwin
+            bundles: dmg
           - platform: macos-latest
             target: x86_64-apple-darwin
+            bundles: dmg
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
+            bundles: nsis
     runs-on: ${{ matrix.platform }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -57,9 +60,16 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: SwagEx v__VERSION__
-          releaseBody: See the assets below for the macOS and Windows installers and updater artifacts.
+          releaseBody: |
+            ## Télécharger SwagEx
+
+            - [Mac récents · puce Apple](https://github.com/mx-design-ux/SwagEx/releases/download/v__VERSION__/SwagEx___VERSION___aarch64.dmg)
+            - [Mac anciens · puce Intel](https://github.com/mx-design-ux/SwagEx/releases/download/v__VERSION__/SwagEx___VERSION___x64.dmg)
+            - [Windows](https://github.com/mx-design-ux/SwagEx/releases/download/v__VERSION__/SwagEx___VERSION___x64-setup.exe)
+
+            Les autres fichiers sont utilisés par la mise à jour automatique de SwagEx.
           releaseDraft: false
           prerelease: false
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
-          args: --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
