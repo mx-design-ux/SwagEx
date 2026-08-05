@@ -83,6 +83,7 @@ jobs:
         run: |
           VERSION="$(node -p "require('./package.json').version")"
           RELEASE_API="repos/${GITHUB_REPOSITORY}/releases/tags/v${VERSION}"
+          RELEASE_ID="$(gh api "${RELEASE_API}" --jq '.id')"
 
           label_asset() {
             local name="$1"
@@ -118,6 +119,6 @@ jobs:
           EOF
           )"
 
-          gh api --method PATCH "${RELEASE_API}" -f body="${release_note}
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" -f body="${release_note}
 
           ${download_section}" >/dev/null
