@@ -46,11 +46,13 @@ impl SiegeCapture {
     pub fn observe(&mut self, response: &Value) -> SiegeProgress {
         let command = response.get("command").and_then(Value::as_str);
 
-        let is_matchup_response = command == Some("GetGuildSiegeMatchupInfo")
-            || response
-                .get("match_info")
-                .and_then(|match_info| match_info.get("match_id"))
-                .is_some();
+        let is_matchup_response = matches!(
+            command,
+            Some("GetGuildSiegeMatchupInfo" | "GetGuildSiegeMatchupInfoForFinished")
+        ) || response
+            .get("match_info")
+            .and_then(|match_info| match_info.get("match_id"))
+            .is_some();
 
         if command == Some("GetGuildSiegeBattleLog") {
             match number_field(response, "log_type") {
@@ -82,6 +84,11 @@ impl SiegeCapture {
         let temporary_path = output_directory.join(format!(".swagex-{safe_name}.tmp"));
 
         let mut document = Map::new();
+        if let Some(matchup_info) = self.matchup_info.as_ref().filter(|matchup| {
+            matchup.get("command").and_then(Value::as_str) == Some("GetGuildSiegeMatchupInfo")
+        }) {
+            document.insert("matchup_info".into(), matchup_info.clone());
+        }
         document.insert(
             "attack_log".into(),
             self.attack_log.clone().unwrap_or(Value::Null),
@@ -142,7 +149,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn captures_the_three_siege_steps_and_writes_a_dedicated_json() {
+    fn includes_matchup_info_during_an_active_siege() {
         let mut capture = SiegeCapture::default();
 
         capture.observe(&serde_json::json!({
@@ -173,9 +180,9 @@ mod tests {
         let document: Value = serde_json::from_slice(&fs::read(exported.path).unwrap()).unwrap();
         assert_eq!(
             document.as_object().unwrap().keys().collect::<Vec<_>>(),
-            vec!["attack_log", "defense_log"]
+            vec!["matchup_info", "attack_log", "defense_log"]
         );
-        assert!(document.get("matchup_info").is_none());
+        assert!(document["matchup_info"].is_object());
         assert!(document["attack_log"].is_object());
         assert!(document["defense_log"].is_object());
         assert!(document.get("defense_list").is_none());
@@ -185,6 +192,41 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn omits_matchup_info_between_sieges() {
+        let mut capture = SiegeCapture::default();
+
+        capture.observe(&serde_json::json!({
+            "command": "GetGuildSiegeMatchupInfoForFinished",
+            "ret_code": 0,
+            "match_info": { "match_id": 123456 }
+        }));
+        capture.observe(&serde_json::json!({
+            "command": "GetGuildSiegeBattleLog",
+            "log_type": 1,
+            "log_list": []
+        }));
+        let progress = capture.observe(&serde_json::json!({
+            "command": "GetGuildSiegeBattleLog",
+            "log_type": 2,
+            "log_list": []
+        }));
+        assert!(progress.is_complete());
+
+        let directory = tempfile::tempdir().unwrap();
+        let exported = capture
+            .write_if_complete(directory.path())
+            .unwrap()
+            .unwrap();
+        let document: Value = serde_json::from_slice(&fs::read(exported.path).unwrap()).unwrap();
+
+        assert_eq!(
+            document.as_object().unwrap().keys().collect::<Vec<_>>(),
+            vec!["attack_log", "defense_log"]
+        );
+        assert!(document.get("matchup_info").is_none());
     }
 
     #[test]

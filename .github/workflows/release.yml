@@ -61,7 +61,7 @@ jobs:
           tagName: v__VERSION__
           releaseName: SwagEx v__VERSION__
           releaseBody: |
-            Rend le JSON Siège compatible avec le format SWEX.
+            Adapte automatiquement le JSON Siège aux sièges actifs et aux intersièges.
           releaseDraft: false
           prerelease: false
           uploadUpdaterJson: true
