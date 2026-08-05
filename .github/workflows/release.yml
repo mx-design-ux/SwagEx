@@ -61,7 +61,7 @@ jobs:
           tagName: v__VERSION__
           releaseName: SwagEx v__VERSION__
           releaseBody: |
-            Corrige le libellé de la première étape du Siège.
+            Rend le JSON Siège compatible avec le format SWEX.
           releaseDraft: false
           prerelease: false
           uploadUpdaterJson: true

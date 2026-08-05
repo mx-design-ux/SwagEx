@@ -83,10 +83,6 @@ impl SiegeCapture {
 
         let mut document = Map::new();
         document.insert(
-            "matchup_info".into(),
-            self.matchup_info.clone().unwrap_or(Value::Null),
-        );
-        document.insert(
             "attack_log".into(),
             self.attack_log.clone().unwrap_or(Value::Null),
         );
@@ -175,7 +171,11 @@ mod tests {
         assert!(filename.starts_with("siege-"));
         assert!(filename.ends_with(".json"));
         let document: Value = serde_json::from_slice(&fs::read(exported.path).unwrap()).unwrap();
-        assert_eq!(document["matchup_info"]["match_info"]["match_id"], 123456);
+        assert_eq!(
+            document.as_object().unwrap().keys().collect::<Vec<_>>(),
+            vec!["attack_log", "defense_log"]
+        );
+        assert!(document.get("matchup_info").is_none());
         assert!(document["attack_log"].is_object());
         assert!(document["defense_log"].is_object());
         assert!(document.get("defense_list").is_none());
@@ -249,7 +249,7 @@ mod tests {
             .unwrap()
             .unwrap();
         let document: Value = serde_json::from_slice(&fs::read(exported.path).unwrap()).unwrap();
-        assert!(document["matchup_info"].is_object());
+        assert!(document.get("matchup_info").is_none());
         assert!(document["attack_log"].is_object());
         assert!(document["defense_log"].is_object());
     }
