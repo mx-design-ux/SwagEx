@@ -61,7 +61,7 @@ jobs:
           tagName: v__VERSION__
           releaseName: SwagEx v__VERSION__
           releaseBody: |
-            Clarifie les trois étapes de l’export Siège.
+            Corrige le libellé de la première étape du Siège.
           releaseDraft: false
           prerelease: false
           uploadUpdaterJson: true
