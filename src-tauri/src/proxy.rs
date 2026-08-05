@@ -52,6 +52,7 @@ const PREFERRED_PROXY_PORT: u16 = 8080;
 const PROFILE_PATH: &str = "/api/gateway_c2.php";
 const CERTIFICATE_PROFILE_PATH: &str = "/SwagEx.mobileconfig";
 const LISTENER_READY_SETTLE_DELAY: Duration = Duration::from_millis(200);
+const SIEGE_COMPLETION_REVEAL_DELAY: Duration = Duration::from_millis(1_000);
 
 #[cfg(target_os = "windows")]
 #[derive(Clone, Default)]
@@ -176,6 +177,17 @@ impl SharedState {
         let mut status = self.status.lock().expect("status mutex poisoned");
         status.phase = "captured".into();
         status.message = "Le JSON a été créé.".into();
+        status.export_path = Some(path.to_string_lossy().into_owned());
+        status.profile_name = Some(display_name);
+    }
+
+    fn record_siege_export(&self, path: PathBuf, display_name: String) {
+        let mut status = self.status.lock().expect("status mutex poisoned");
+        if status.phase != "siege_listening" {
+            return;
+        }
+        status.phase = "captured".into();
+        status.message = "Le JSON du siège a été créé.".into();
         status.export_path = Some(path.to_string_lossy().into_owned());
         status.profile_name = Some(display_name);
     }
@@ -447,7 +459,8 @@ impl HttpHandler for CaptureHandler {
                         shared.record_siege_progress(progress);
                         match exported {
                             Ok(Some(exported)) => {
-                                shared.record_export(exported.path, exported.display_name);
+                                std::thread::sleep(SIEGE_COMPLETION_REVEAL_DELAY);
+                                shared.record_siege_export(exported.path, exported.display_name);
                             }
                             Ok(None) => {}
                             Err(error) => shared.record_proxy_error(error),

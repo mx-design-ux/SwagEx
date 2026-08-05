@@ -61,7 +61,7 @@ jobs:
           tagName: v__VERSION__
           releaseName: SwagEx v__VERSION__
           releaseBody: |
-            Rétablit la création des exports Compte et Siège.
+            Finalise l’export Siège après les onglets Infos et Défense.
           releaseDraft: false
           prerelease: false
           uploadUpdaterJson: true
