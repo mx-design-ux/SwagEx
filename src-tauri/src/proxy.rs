@@ -252,15 +252,24 @@ type CompletedBodyCallback = Box<dyn FnOnce(Vec<u8>) + Send + Sync + 'static>;
 struct ObservedBody {
     inner: Mutex<Body>,
     captured: Vec<u8>,
+    expected_data_length: Option<u64>,
     on_complete: Option<CompletedBodyCallback>,
 }
 
 impl ObservedBody {
     fn new(inner: Body, on_complete: CompletedBodyCallback) -> Self {
+        let expected_data_length = inner.size_hint().exact();
         Self {
             inner: Mutex::new(inner),
             captured: Vec::new(),
+            expected_data_length,
             on_complete: Some(on_complete),
+        }
+    }
+
+    fn complete_capture(&mut self) {
+        if let Some(on_complete) = self.on_complete.take() {
+            on_complete(std::mem::take(&mut self.captured));
         }
     }
 }
@@ -271,6 +280,14 @@ impl std::fmt::Debug for ObservedBody {
             .debug_struct("ObservedBody")
             .field("captured_bytes", &self.captured.len())
             .finish_non_exhaustive()
+    }
+}
+
+impl Drop for ObservedBody {
+    fn drop(&mut self) {
+        // Chunked responses do not expose an exact size and Hyper may release
+        // the consumed body without polling it once more for `None`.
+        self.complete_capture();
     }
 }
 
@@ -292,6 +309,15 @@ impl HttpBody for ObservedBody {
             Poll::Ready(Some(Ok(frame))) => {
                 if let Some(data) = frame.data_ref() {
                     this.captured.extend_from_slice(data);
+                    if this
+                        .expected_data_length
+                        .is_some_and(|expected| this.captured.len() as u64 >= expected)
+                    {
+                        // Hyper may consider an exact-length body complete as soon as its
+                        // final data frame has been forwarded. In that case the consumer is
+                        // allowed not to poll once more for `None`, so finish the capture now.
+                        this.complete_capture();
+                    }
                 }
                 Poll::Ready(Some(Ok(frame)))
             }
@@ -300,9 +326,7 @@ impl HttpBody for ObservedBody {
                 Poll::Ready(Some(Err(error)))
             }
             Poll::Ready(None) => {
-                if let Some(on_complete) = this.on_complete.take() {
-                    on_complete(std::mem::take(&mut this.captured));
-                }
+                this.complete_capture();
                 Poll::Ready(None)
             }
             Poll::Pending => Poll::Pending,
@@ -1225,6 +1249,7 @@ pub fn reset_setup(app: AppHandle, state: State<'_, AppState>) -> Result<StatusS
 mod tests {
     use super::*;
     use http_body_util::BodyExt;
+    use std::future::poll_fn;
 
     #[test]
     fn only_intercepts_the_game_domain() {
@@ -1265,6 +1290,73 @@ mod tests {
                 .expect("callback mutex poisoned")
                 .as_deref(),
             Some(b"gateway response".as_slice())
+        );
+    }
+
+    #[tokio::test]
+    async fn observed_body_completes_exact_length_capture_on_the_final_data_frame() {
+        let observed_bytes = Arc::new(Mutex::new(None));
+        let callback_bytes = Arc::clone(&observed_bytes);
+        let mut body = Box::pin(ObservedBody::new(
+            Body::from(b"gateway response".to_vec()),
+            Box::new(move |captured| {
+                *callback_bytes.lock().expect("callback mutex poisoned") = Some(captured);
+            }),
+        ));
+
+        let frame = poll_fn(|context| body.as_mut().poll_frame(context))
+            .await
+            .expect("the body should return its data frame")
+            .expect("the data frame should be readable");
+
+        assert_eq!(
+            frame.data_ref().map(Bytes::as_ref),
+            Some(b"gateway response".as_slice())
+        );
+        assert_eq!(
+            observed_bytes
+                .lock()
+                .expect("callback mutex poisoned")
+                .as_deref(),
+            Some(b"gateway response".as_slice())
+        );
+    }
+
+    #[tokio::test]
+    async fn observed_body_completes_unknown_length_capture_when_consumed_body_is_dropped() {
+        let observed_bytes = Arc::new(Mutex::new(None));
+        let callback_bytes = Arc::clone(&observed_bytes);
+        let mut body = Box::pin(ObservedBody::new(
+            Body::from(b"chunked gateway response".to_vec()),
+            Box::new(move |captured| {
+                *callback_bytes.lock().expect("callback mutex poisoned") = Some(captured);
+            }),
+        ));
+        body.expected_data_length = None;
+
+        let frame = poll_fn(|context| body.as_mut().poll_frame(context))
+            .await
+            .expect("the body should return its data frame")
+            .expect("the data frame should be readable");
+        assert_eq!(
+            frame.data_ref().map(Bytes::as_ref),
+            Some(b"chunked gateway response".as_slice())
+        );
+        assert!(
+            observed_bytes
+                .lock()
+                .expect("callback mutex poisoned")
+                .is_none()
+        );
+
+        drop(body);
+
+        assert_eq!(
+            observed_bytes
+                .lock()
+                .expect("callback mutex poisoned")
+                .as_deref(),
+            Some(b"chunked gateway response".as_slice())
         );
     }
 }
