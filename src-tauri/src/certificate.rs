@@ -180,7 +180,7 @@ pub fn ensure_certificate(directory: &Path) -> anyhow::Result<CertificateMateria
     // regeneration instead of rotating the certificate behind the user's back.
     if !all_files_exist && (directory_existed || !no_files_exist) {
         bail!(
-            "Le certificat SwagEx est incomplet. Utilisez « Nouveau certificat ? » uniquement pour le remplacer volontairement."
+            "Le certificat SwagEx est incomplet. Utilisez « Nouveau certificat… » uniquement pour le remplacer volontairement."
         );
     }
 

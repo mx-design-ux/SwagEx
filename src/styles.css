@@ -308,7 +308,6 @@ button:disabled { cursor: wait; opacity: .48; }
   gap: 16px;
 }
 .bottom-actions .bottom-action { position: static; transform: none; }
-.proxy-actions #regenerate-certificate { width: 206px; }
 .proxy-actions .capture-account,
 .proxy-actions .capture-siege { width: 140px; }
 

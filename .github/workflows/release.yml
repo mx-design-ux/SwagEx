@@ -61,7 +61,7 @@ jobs:
           tagName: v__VERSION__
           releaseName: SwagEx v__VERSION__
           releaseBody: |
-            Correction des exports Compte et Siège.
+            Corrige la connexion au jeu pendant les exports Compte et Siège.
           releaseDraft: false
           prerelease: false
           uploadUpdaterJson: true

@@ -61,7 +61,6 @@ const elements = {
   windowsCertificateStatus: document.querySelector<HTMLElement>("#windows-certificate-status")!,
   proxyHost: document.querySelector<HTMLElement>("#proxy-host")!,
   proxyPort: document.querySelector<HTMLElement>("#proxy-port")!,
-  regenerateCertificate: document.querySelector<HTMLButtonElement>("#regenerate-certificate")!,
   stopListening: document.querySelector<HTMLButtonElement>("#stop-listening")!,
   stopSiegeListening: document.querySelector<HTMLButtonElement>("#stop-siege-listening")!,
   captureAccount: Array.from(document.querySelectorAll<HTMLButtonElement>(".capture-account")),
@@ -151,7 +150,7 @@ async function startSteamFlow(): Promise<void> {
   const status = await invoke<StatusSnapshot>("export_status");
   const next = status.windowsCertificateSetupCompleted
     ? await invoke<StatusSnapshot>("prepare_steam_export_choice")
-    : await invoke<StatusSnapshot>("start_windows_certificate_setup");
+    : await invoke<StatusSnapshot>("start_windows_certificate_setup", { regenerate: false });
   updateStatus(next);
   beginPolling();
 }
@@ -252,7 +251,6 @@ function updateStatus(status: StatusSnapshot): void {
 
   elements.certificateDone.disabled = actionInProgress;
   elements.windowsCertificateAction.disabled = actionInProgress;
-  elements.regenerateCertificate.disabled = actionInProgress;
   elements.captureAccount.forEach((button) => { button.disabled = actionInProgress; });
   elements.captureSiege.forEach((button) => { button.disabled = actionInProgress; });
 }
@@ -370,13 +368,29 @@ async function checkForUpdates(manual: boolean): Promise<void> {
 async function installAppMenu(): Promise<void> {
   try {
     const changeDevice = changeDeviceMenuItem();
+    const newCertificate = newCertificateMenuItem();
     const updates = updateMenuItem();
     const quit = quitMenuItem();
-    const appSubmenu = await Submenu.new({ text: "SwagEx", items: [changeDevice, updates, quit] });
+    const appSubmenu = await Submenu.new({ text: "SwagEx", items: [changeDevice, newCertificate, updates, quit] });
     const menu = await Menu.new({ items: [appSubmenu] });
     await menu.setAsAppMenu();
   } catch {
     // The native menu is optional in browser development and older runtimes.
+  }
+}
+
+async function createNewCertificate(): Promise<void> {
+  stopPolling();
+  try {
+    const command = selectedGameDevice() === "steam"
+      ? "start_windows_certificate_setup"
+      : "start_certificate_setup";
+    const status = await invoke<StatusSnapshot>(command, { regenerate: true });
+    updateStatus(status);
+    beginPolling();
+  } catch (error) {
+    elements.errorMessage.textContent = String(error);
+    showScreen(elements.errorScreen);
   }
 }
 
@@ -385,6 +399,14 @@ function changeDeviceMenuItem() {
     id: "change-game-device",
     text: "Changer mon appareil de jeu…",
     action: () => { void changeGameDevice(); },
+  } as const;
+}
+
+function newCertificateMenuItem() {
+  return {
+    id: "new-certificate",
+    text: "Nouveau certificat…",
+    action: () => { void createNewCertificate(); },
   } as const;
 }
 
@@ -533,9 +555,6 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   elements.captureSiege.forEach((button) => {
     button.addEventListener("click", () => { startCapture("siege"); });
-  });
-  elements.regenerateCertificate.addEventListener("click", () => {
-    void runAction("start_certificate_setup", { regenerate: true });
   });
   elements.stopListening.addEventListener("click", () => {
     void runAction(selectedGameDevice() === "steam" ? "cancel_steam_export" : "cancel_export");

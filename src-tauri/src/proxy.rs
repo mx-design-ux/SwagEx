@@ -10,11 +10,15 @@ use crate::{
     storage,
 };
 use flate2::read::{GzDecoder, ZlibDecoder};
-use http_body_util::BodyExt;
+use http_body_util::combinators::BoxBody;
 use hudsucker::{
-    Body, HttpContext, HttpHandler, Proxy, RequestOrResponse,
+    Body, Error as ProxyError, HttpContext, HttpHandler, Proxy, RequestOrResponse,
     certificate_authority::RcgenAuthority,
-    hyper::{Method, Request, Response, StatusCode, header},
+    hyper::{
+        Method, Request, Response, StatusCode,
+        body::{Body as HttpBody, Bytes, Frame, SizeHint},
+        header,
+    },
     rustls::crypto::aws_lc_rs,
 };
 use serde::Serialize;
@@ -23,7 +27,9 @@ use std::{
     io::Read,
     net::{IpAddr, Ipv4Addr, UdpSocket},
     path::{Path, PathBuf},
+    pin::Pin,
     sync::{Arc, Mutex},
+    task::{Context, Poll},
     time::Duration,
 };
 use tauri::{AppHandle, State};
@@ -38,13 +44,7 @@ use hudsucker::{
 #[cfg(target_os = "windows")]
 use hyper_rustls::{ConfigBuilderExt, HttpsConnector, HttpsConnectorBuilder};
 #[cfg(target_os = "windows")]
-use std::{
-    collections::HashMap,
-    future::Future,
-    net::SocketAddr,
-    pin::Pin,
-    task::{Context, Poll},
-};
+use std::{collections::HashMap, future::Future, net::SocketAddr};
 #[cfg(target_os = "windows")]
 use tower_service::Service;
 
@@ -245,7 +245,83 @@ struct CaptureHandler {
     output_directory: Arc<PathBuf>,
     shared: Arc<SharedState>,
     siege_capture: Arc<Mutex<SiegeCapture>>,
-    cancel: CancellationToken,
+}
+
+type CompletedBodyCallback = Box<dyn FnOnce(Vec<u8>) + Send + Sync + 'static>;
+
+struct ObservedBody {
+    inner: Mutex<Body>,
+    captured: Vec<u8>,
+    on_complete: Option<CompletedBodyCallback>,
+}
+
+impl ObservedBody {
+    fn new(inner: Body, on_complete: CompletedBodyCallback) -> Self {
+        Self {
+            inner: Mutex::new(inner),
+            captured: Vec::new(),
+            on_complete: Some(on_complete),
+        }
+    }
+}
+
+impl std::fmt::Debug for ObservedBody {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ObservedBody")
+            .field("captured_bytes", &self.captured.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl HttpBody for ObservedBody {
+    type Data = Bytes;
+    type Error = ProxyError;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        let this = self.get_mut();
+        let polled = {
+            let mut inner = this.inner.lock().expect("response body mutex poisoned");
+            Pin::new(&mut *inner).poll_frame(context)
+        };
+
+        match polled {
+            Poll::Ready(Some(Ok(frame))) => {
+                if let Some(data) = frame.data_ref() {
+                    this.captured.extend_from_slice(data);
+                }
+                Poll::Ready(Some(Ok(frame)))
+            }
+            Poll::Ready(Some(Err(error))) => {
+                this.on_complete.take();
+                Poll::Ready(Some(Err(error)))
+            }
+            Poll::Ready(None) => {
+                if let Some(on_complete) = this.on_complete.take() {
+                    on_complete(std::mem::take(&mut this.captured));
+                }
+                Poll::Ready(None)
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.inner
+            .lock()
+            .expect("response body mutex poisoned")
+            .is_end_stream()
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        self.inner
+            .lock()
+            .expect("response body mutex poisoned")
+            .size_hint()
+    }
 }
 
 impl CaptureHandler {
@@ -304,59 +380,63 @@ impl HttpHandler for CaptureHandler {
         }
 
         let (parts, body) = response.into_parts();
-        let collected = match body.collect().await {
-            Ok(collected) => collected.to_bytes(),
-            Err(_) => return Response::from_parts(parts, Body::empty()),
-        };
-        let forwarded_body = collected.clone();
-        let capture_body =
-            decode_http_body(&parts.headers, &collected).unwrap_or_else(|| collected.to_vec());
-
-        match self.capture_mode {
+        let headers = parts.headers.clone();
+        let on_complete: CompletedBodyCallback = match self.capture_mode {
             CaptureMode::Account => {
                 let output_directory = Arc::clone(&self.output_directory);
                 let shared = Arc::clone(&self.shared);
-                let cancel = self.cancel.clone();
-                tokio::task::spawn_blocking(move || {
-                    let profile = decode_profile(&capture_body).ok()?;
-                    let command = profile.get("command").and_then(Value::as_str)?;
-                    if !matches!(command, "HubUserLogin" | "GuestLogin") {
-                        return None;
-                    }
-                    let exported = write_profile(&profile, &output_directory).ok()?;
-                    shared.record_export(exported.path, exported.display_name);
-                    schedule_proxy_stop(cancel);
-                    Some(())
-                });
+                Box::new(move |collected| {
+                    tokio::task::spawn_blocking(move || {
+                        if shared.snapshot().phase == "captured" {
+                            return None;
+                        }
+                        let capture_body = decode_http_body(&headers, &collected)
+                            .unwrap_or_else(|| collected.to_vec());
+                        let profile = decode_profile(&capture_body).ok()?;
+                        let command = profile.get("command").and_then(Value::as_str)?;
+                        if !matches!(command, "HubUserLogin" | "GuestLogin") {
+                            return None;
+                        }
+                        let exported = write_profile(&profile, &output_directory).ok()?;
+                        shared.record_export(exported.path, exported.display_name);
+                        Some(())
+                    });
+                })
             }
             CaptureMode::Siege => {
                 let siege_capture = Arc::clone(&self.siege_capture);
                 let siege_directory = self.output_directory.join("sieges");
                 let shared = Arc::clone(&self.shared);
-                let cancel = self.cancel.clone();
-                tokio::task::spawn_blocking(move || {
-                    let response = decode_profile(&capture_body).ok()?;
-                    let mut capture = siege_capture.lock().ok()?;
-                    let progress = capture.observe(&response);
-                    let exported = capture.write_if_complete(&siege_directory);
-                    drop(capture);
-
-                    shared.record_siege_progress(progress);
-                    match exported {
-                        Ok(Some(exported)) => {
-                            shared.record_export(exported.path, exported.display_name);
-                            schedule_proxy_stop(cancel);
+                Box::new(move |collected| {
+                    tokio::task::spawn_blocking(move || {
+                        if shared.snapshot().phase == "captured" {
+                            return None;
                         }
-                        Ok(None) => {}
-                        Err(error) => shared.record_proxy_error(error),
-                    }
-                    Some(())
-                });
-            }
-            CaptureMode::Disabled => {}
-        }
+                        let capture_body = decode_http_body(&headers, &collected)
+                            .unwrap_or_else(|| collected.to_vec());
+                        let response = decode_profile(&capture_body).ok()?;
+                        let mut capture = siege_capture.lock().ok()?;
+                        let progress = capture.observe(&response);
+                        let exported = capture.write_if_complete(&siege_directory);
+                        drop(capture);
 
-        Response::from_parts(parts, Body::from(forwarded_body))
+                        shared.record_siege_progress(progress);
+                        match exported {
+                            Ok(Some(exported)) => {
+                                shared.record_export(exported.path, exported.display_name);
+                            }
+                            Ok(None) => {}
+                            Err(error) => shared.record_proxy_error(error),
+                        }
+                        Some(())
+                    });
+                })
+            }
+            CaptureMode::Disabled => unreachable!("disabled capture was returned above"),
+        };
+
+        let observed = ObservedBody::new(body, on_complete);
+        Response::from_parts(parts, Body::from(BoxBody::new(observed)))
     }
 
     async fn should_intercept_connect(
@@ -377,13 +457,6 @@ impl HttpHandler for CaptureHandler {
     ) -> bool {
         client_hello.server_name().is_some_and(is_game_host)
     }
-}
-
-fn schedule_proxy_stop(cancel: CancellationToken) {
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
-        cancel.cancel();
-    });
 }
 
 fn is_game_host(host: &str) -> bool {
@@ -532,7 +605,6 @@ async fn start_proxy(
         output_directory: Arc::new(output_directory),
         shared: Arc::clone(&state.shared),
         siege_capture: Arc::new(Mutex::new(SiegeCapture::default())),
-        cancel: cancel.clone(),
     };
     let authority = RcgenAuthority::new(certificate.issuer, 128, aws_lc_rs::default_provider());
 
@@ -802,7 +874,13 @@ pub async fn complete_proxy_setup(
 pub fn start_windows_certificate_setup(
     app: AppHandle,
     state: State<'_, AppState>,
+    regenerate: bool,
 ) -> Result<StatusSnapshot, String> {
+    if regenerate {
+        let app_data = app_data_directory(&app).map_err(|error| error.to_string())?;
+        setup::write(&app_data, SetupSettings::default()).map_err(|error| error.to_string())?;
+        regenerate_certificate(&app_data.join("certificate")).map_err(|error| error.to_string())?;
+    }
     let status = windows_certificate_setup_status(
         &app,
         &state,
@@ -1146,6 +1224,7 @@ pub fn reset_setup(app: AppHandle, state: State<'_, AppState>) -> Result<StatusS
 #[cfg(test)]
 mod tests {
     use super::*;
+    use http_body_util::BodyExt;
 
     #[test]
     fn only_intercepts_the_game_domain() {
@@ -1160,5 +1239,32 @@ mod tests {
         let app_data = Path::new("/tmp/swagex-app-data");
 
         assert_eq!(exports_directory(app_data), app_data.join("exports"),);
+    }
+
+    #[tokio::test]
+    async fn observed_body_forwards_bytes_while_copying_them_for_capture() {
+        let observed_bytes = Arc::new(Mutex::new(None));
+        let callback_bytes = Arc::clone(&observed_bytes);
+        let body = ObservedBody::new(
+            Body::from(b"gateway response".to_vec()),
+            Box::new(move |captured| {
+                *callback_bytes.lock().expect("callback mutex poisoned") = Some(captured);
+            }),
+        );
+
+        let forwarded = Body::from(BoxBody::new(body))
+            .collect()
+            .await
+            .expect("observed response should remain readable")
+            .to_bytes();
+
+        assert_eq!(forwarded.as_ref(), b"gateway response");
+        assert_eq!(
+            observed_bytes
+                .lock()
+                .expect("callback mutex poisoned")
+                .as_deref(),
+            Some(b"gateway response".as_slice())
+        );
     }
 }
