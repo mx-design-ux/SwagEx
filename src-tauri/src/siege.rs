@@ -37,10 +37,7 @@ pub struct SiegeCapture {
 impl SiegeCapture {
     pub fn progress(&self) -> SiegeProgress {
         SiegeProgress {
-            // Reaching the attack log necessarily means that the player first
-            // opened the Siege screen. Some game versions do not repeat the
-            // standalone matchup response when that data is already cached.
-            matchup_captured: self.matchup_info.is_some() || self.attack_log.is_some(),
+            matchup_captured: self.matchup_info.is_some(),
             attack_log_captured: self.attack_log.is_some(),
             defense_log_captured: self.defense_log.is_some(),
         }
@@ -214,7 +211,7 @@ mod tests {
     }
 
     #[test]
-    fn attack_log_proves_siege_was_opened_and_defense_completes_export() {
+    fn requires_the_three_distinct_siege_steps_before_export() {
         let mut capture = SiegeCapture::default();
 
         let attack_progress = capture.observe(&serde_json::json!({
@@ -222,7 +219,7 @@ mod tests {
             "log_type": 1,
             "log_list": []
         }));
-        assert!(attack_progress.matchup_captured);
+        assert!(!attack_progress.matchup_captured);
         assert!(attack_progress.attack_log_captured);
         assert!(!attack_progress.defense_log_captured);
 
@@ -231,15 +228,28 @@ mod tests {
             "log_type": 2,
             "log_list": []
         }));
-        assert!(defense_progress.is_complete());
+        assert!(!defense_progress.is_complete());
 
         let directory = tempfile::tempdir().unwrap();
+        assert!(
+            capture
+                .write_if_complete(directory.path())
+                .unwrap()
+                .is_none()
+        );
+
+        let progress = capture.observe(&serde_json::json!({
+            "ret_code": 0,
+            "match_info": { "match_id": 123456 }
+        }));
+        assert!(progress.is_complete());
+
         let exported = capture
             .write_if_complete(directory.path())
             .unwrap()
             .unwrap();
         let document: Value = serde_json::from_slice(&fs::read(exported.path).unwrap()).unwrap();
-        assert!(document["matchup_info"].is_null());
+        assert!(document["matchup_info"].is_object());
         assert!(document["attack_log"].is_object());
         assert!(document["defense_log"].is_object());
     }

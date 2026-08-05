@@ -65,7 +65,8 @@ const elements = {
   stopSiegeListening: document.querySelector<HTMLButtonElement>("#stop-siege-listening")!,
   captureAccount: Array.from(document.querySelectorAll<HTMLButtonElement>(".capture-account")),
   captureSiege: Array.from(document.querySelectorAll<HTMLButtonElement>(".capture-siege")),
-  siegeEntryStep: document.querySelector<HTMLElement>("[data-siege-step='entry']")!,
+  siegeMatchupStep: document.querySelector<HTMLElement>("[data-siege-step='matchup']")!,
+  siegeAttackStep: document.querySelector<HTMLElement>("[data-siege-step='attack']")!,
   siegeDefenseStep: document.querySelector<HTMLElement>("[data-siege-step='defense']")!,
   exportName: document.querySelector<HTMLElement>("#export-name")!,
   revealExport: document.querySelector<HTMLButtonElement>("#reveal-export")!,
@@ -226,10 +227,8 @@ function updateStatus(status: StatusSnapshot): void {
       : "Compte.json";
   }
 
-  elements.siegeEntryStep.classList.toggle(
-    "is-complete",
-    status.siegeMatchupCaptured || status.siegeAttackLogCaptured,
-  );
+  elements.siegeMatchupStep.classList.toggle("is-complete", status.siegeMatchupCaptured);
+  elements.siegeAttackStep.classList.toggle("is-complete", status.siegeAttackLogCaptured);
   elements.siegeDefenseStep.classList.toggle("is-complete", status.siegeDefenseLogCaptured);
 
   const windowsExportChoice = selectedGameDevice() === "steam" && status.phase === "export_choice";
@@ -500,7 +499,8 @@ async function showDevelopmentPreview(): Promise<boolean> {
     elements.windowsCaptureActions.hidden = false;
   }
   if (screen === elements.siegeScreen) {
-    elements.siegeEntryStep.classList.add("is-complete");
+    elements.siegeMatchupStep.classList.add("is-complete");
+    elements.siegeAttackStep.classList.add("is-complete");
   }
   if (screen === elements.certificateScreen) {
     elements.certificateQr.src = await QRCode.toDataURL("http://192.168.1.24:8080/SwagEx.mobileconfig", {

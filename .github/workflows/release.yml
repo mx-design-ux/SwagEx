@@ -61,7 +61,7 @@ jobs:
           tagName: v__VERSION__
           releaseName: SwagEx v__VERSION__
           releaseBody: |
-            Finalise l’export Siège après les onglets Infos et Défense.
+            Rétablit les trois étapes distinctes de l’export Siège.
           releaseDraft: false
           prerelease: false
           uploadUpdaterJson: true
