@@ -104,3 +104,20 @@ jobs:
           label_asset "SwagEx_${VERSION}_aarch64.app.tar.gz" "Mise à jour automatique · Mac récents"
           label_asset "SwagEx_${VERSION}_x64.app.tar.gz" "Mise à jour automatique · Mac anciens"
           label_asset "latest.json" "Mise à jour automatique · manifeste"
+
+          release_body="$(gh api "${RELEASE_API}" --jq '.body')"
+          release_note="$(printf '%s\n' "${release_body}" | awk '/^## Télécharger SwagEx[[:space:]]*$/ { exit } { print }')"
+          download_section="$(cat <<EOF
+          ## Télécharger SwagEx
+
+          - [Mac récents · puce Apple](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/SwagEx_${VERSION}_aarch64.dmg)
+          - [Mac anciens · puce Intel](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/SwagEx_${VERSION}_x64.dmg)
+          - [Windows](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/SwagEx_${VERSION}_x64-setup.exe)
+
+          Les autres fichiers sont utilisés par la mise à jour automatique de SwagEx.
+          EOF
+          )"
+
+          gh api --method PATCH "${RELEASE_API}" -f body="${release_note}
+
+          ${download_section}" >/dev/null
