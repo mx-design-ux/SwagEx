@@ -229,6 +229,9 @@ impl SharedState {
 
     fn finish_account_without_world(&self) -> Result<StatusSnapshot, String> {
         let mut status = self.status.lock().expect("status mutex poisoned");
+        if status.phase == "captured" && status.export_path.is_some() {
+            return Ok(status.clone());
+        }
         if status.phase != "world_defense_listening" {
             return Err("Aucune capture World en cours.".into());
         }
@@ -1439,6 +1442,13 @@ mod tests {
             Some(path.as_str())
         );
         assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+
+        // The optional action can be clicked before the capture notification arrives.
+        let enriched = std::fs::read(&path).unwrap();
+        let finished = shared.finish_account_without_world().unwrap();
+        assert_eq!(finished.message, shared.snapshot().message);
+        assert_eq!(finished.export_path.as_deref(), Some(path.as_str()));
+        assert_eq!(std::fs::read(&path).unwrap(), enriched);
     }
 
     #[tokio::test]
