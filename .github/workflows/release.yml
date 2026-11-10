@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
+          - platform: macos-15
             target: aarch64-apple-darwin
             bundles: app,dmg
           - platform: macos-15-intel
@@ -61,9 +61,9 @@ jobs:
           tagName: v__VERSION__
           releaseName: SwagEx v__VERSION__
           releaseBody: |
-            L’export Compte peut inclure les défenses du Combat de guilde World dans le même fichier JSON.
+            Le bouton **Inclure Défenses WGB** reprend les marges internes des autres boutons. Il ajoute les défenses du Combat de guilde World au JSON du compte.
 
-            Après l’export Compte, cliquez sur **Inclure les défenses World**, puis ouvrez **Tour de Guilde → Combat → Combat de guilde World → Défense** dans Summoners War.
+            Après l’export Compte, cliquez sur **Inclure Défenses WGB**, puis ouvrez **Tour de Guilde → Combat → Combat de guilde World → Défense** dans Summoners War.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

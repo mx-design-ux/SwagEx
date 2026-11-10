@@ -61,7 +61,7 @@ Depuis la version 0.3.6, les blocs d’instructions mesurent 404 px et le parcou
 
 Depuis la version 0.4.0, l’écran de configuration propose directement **Compte** comme action principale et **Siège** comme action secondaire. L’export Compte conserve son fonctionnement et sa compatibilité existants. L’export Siège guide successivement l’ouverture du Combat d’occupation, de l’onglet Infos puis de l’onglet Défense. Il écrit un fichier séparé nommé `siege-JJMMAA.json` dans le dossier des exports de siège et arrête l’écoute lorsque les trois informations attendues ont été capturées.
 
-Depuis la version 0.5.1, le mode **Compte** propose **Inclure les défenses World** après la connexion au jeu. Dans Summoners War, ouvrez **Tour de Guilde → Combat → Combat de guilde World → Défense**. Si le placement est déjà ouvert, quittez cet écran puis rouvrez-le. SwagEx ajoute la réponse du jeu à la clé `swagex_world_defense` du même fichier de compte, après vérification de l’identifiant. Vous pouvez aussi terminer avec l’export Compte de base.
+Depuis la version 0.5.1, le mode **Compte** permet d’ajouter les défenses World après la connexion au jeu. Cliquez sur **Inclure Défenses WGB**. Dans Summoners War, ouvrez **Tour de Guilde → Combat → Combat de guilde World → Défense**. Si le placement est déjà ouvert, quittez cet écran puis rouvrez-le. SwagEx ajoute la réponse du jeu à la clé `swagex_world_defense` du même fichier de compte, après vérification de l’identifiant. Vous pouvez aussi terminer avec l’export Compte de base.
 
 Après capture, le nom du fichier JSON et son icône sont cliquables pour afficher le dossier correspondant dans Finder sur macOS ou l’Explorateur de fichiers sur Windows, puis **Quitter SwagEx** ferme l’application.
 

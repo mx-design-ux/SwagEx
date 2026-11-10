@@ -456,8 +456,7 @@ button:disabled { cursor: wait; opacity: .48; }
   width: 191px;
   transform: none;
 }
-.json-screen .bottom-action { width: 190px; }
-.json-screen #include-world-defense { width: 260px; }
+.json-screen .bottom-action { min-width: 190px; }
 
 .error-screen { display: grid; place-items: center; align-content: center; gap: 18px; padding: 0 70px; }
 .error-screen h1 { margin: 0; color: #f3f3f3; font-size: 25px; }
