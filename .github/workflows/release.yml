@@ -18,7 +18,7 @@ jobs:
           - platform: macos-latest
             target: aarch64-apple-darwin
             bundles: app,dmg
-          - platform: macos-latest
+          - platform: macos-15-intel
             target: x86_64-apple-darwin
             bundles: app,dmg
           - platform: windows-latest
@@ -61,10 +61,10 @@ jobs:
           tagName: v__VERSION__
           releaseName: SwagEx v__VERSION__
           releaseBody: |
-            Ajoute le mode Défenses World pour exporter localement les formations enregistrées du Combat de guilde World.
+            L’export Compte peut inclure les défenses du Combat de guilde World dans le même fichier JSON.
 
-            Dans SwagEx, cliquez sur **Défenses World**, puis ouvrez **Tour de Guilde → Combat → Combat de guilde World → Défense** dans Summoners War. Le nom du fichier JSON apparaît dans SwagEx une fois la liste capturée.
-          releaseDraft: false
+            Après l’export Compte, cliquez sur **Inclure les défenses World**, puis ouvrez **Tour de Guilde → Combat → Combat de guilde World → Défense** dans Summoners War.
+          releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
@@ -84,8 +84,17 @@ jobs:
         shell: bash
         run: |
           VERSION="$(node -p "require('./package.json').version")"
-          RELEASE_API="repos/${GITHUB_REPOSITORY}/releases/tags/v${VERSION}"
-          RELEASE_ID="$(gh api "${RELEASE_API}" --jq '.id')"
+          RELEASE_ID="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" --jq ".[] | select(.tag_name == \"v${VERSION}\" and .draft) | .id")"
+          [[ "${RELEASE_ID}" =~ ^[0-9]+$ ]]
+          RELEASE_API="repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}"
+          MANIFEST_ID="$(gh api "${RELEASE_API}" --jq '.assets[] | select(.name == "latest.json") | .id')"
+          [[ "${MANIFEST_ID}" =~ ^[0-9]+$ ]]
+          gh api -H "Accept: application/octet-stream" "repos/${GITHUB_REPOSITORY}/releases/assets/${MANIFEST_ID}" \
+            | jq -e --arg version "${VERSION}" '
+                .version == $version and
+                ([.platforms["darwin-aarch64"], .platforms["darwin-x86_64"], .platforms["windows-x86_64"]]
+                 | all((.url | type == "string" and length > 0) and (.signature | type == "string" and length > 0)))
+              ' >/dev/null
 
           label_asset() {
             local name="$1"
@@ -121,6 +130,6 @@ jobs:
           EOF
           )"
 
-          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" -f body="${release_note}
+          gh api --method PATCH "${RELEASE_API}" -F draft=false -f make_latest=true -f body="${release_note}
 
           ${download_section}" >/dev/null

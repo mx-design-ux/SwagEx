@@ -73,7 +73,6 @@
           <div class="bottom-actions windows-capture-actions" id="windows-capture-actions" hidden>
             <button class="bottom-action primary-action capture-account" type="button">Compte</button>
             <button class="bottom-action secondary-action capture-siege" type="button">Siège</button>
-            <button class="bottom-action secondary-action capture-world-defense" type="button">Défenses World</button>
           </div>
         </section>
 
@@ -93,7 +92,6 @@
           <div class="bottom-actions proxy-actions">
             <button class="bottom-action primary-action capture-account" type="button">Compte</button>
             <button class="bottom-action secondary-action capture-siege" type="button">Siège</button>
-            <button class="bottom-action secondary-action capture-world-defense" type="button">Défenses World</button>
           </div>
         </section>
 
@@ -107,6 +105,7 @@
             <div id="waiting-world-defense-guide" class="world-defense-guide" hidden>
               <p>Dans Summoners War, ouvre <strong>Tour de Guilde → Combat → Combat de guilde World → Défense</strong>.</p>
               <p>Si le placement de la défense est déjà ouvert, quitte cet écran puis rouvre-le.</p>
+              <p id="world-defense-status" role="status" hidden></p>
             </div>
           </div>
           <button class="bottom-action secondary-action" id="stop-listening" type="button">Arrêter l’écoute</button>
@@ -131,9 +130,13 @@
               <img class="export-icon" src="/src/assets/ui/paper.svg" alt="" aria-hidden="true" />
               <span id="export-name">Compte.json</span>
             </button>
-            <p class="export-reminder">Vous pouvez désactiver le proxy dans les paramètres Wi‑Fi de l’appareil. Bon jeu&nbsp;!</p>
+            <p id="export-status" class="export-reminder" role="status"></p>
+            <p id="export-reminder" class="export-reminder">Vous pouvez désactiver le proxy dans les paramètres Wi‑Fi de l’appareil. Bon jeu&nbsp;!</p>
           </div>
-          <button class="bottom-action secondary-action" id="quit-app" type="button">Quitter SwagEx</button>
+          <div class="bottom-actions">
+            <button class="bottom-action primary-action" id="include-world-defense" type="button" hidden>Inclure les défenses World</button>
+            <button class="bottom-action secondary-action" id="quit-app" type="button">Quitter SwagEx</button>
+          </div>
           <h1 id="json-title" class="visually-hidden">Export JSON terminé</h1>
         </section>
 

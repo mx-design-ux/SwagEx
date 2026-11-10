@@ -29,6 +29,10 @@ fn decrypt_payload(encoded_body: &[u8]) -> anyhow::Result<Vec<u8>> {
     Ok(decrypted.to_vec())
 }
 
+pub fn decode_request(encoded_body: &[u8]) -> anyhow::Result<Value> {
+    Ok(serde_json::from_slice(&decrypt_payload(encoded_body)?)?)
+}
+
 pub fn decode_profile(encoded_body: &[u8]) -> anyhow::Result<Value> {
     let decrypted = decrypt_payload(encoded_body)?;
 
@@ -86,6 +90,16 @@ mod tests {
             .encrypt_padded_mut::<Pkcs7>(&mut buffer, payload.len())
             .unwrap();
         STANDARD.encode(encrypted)
+    }
+
+    #[test]
+    fn decodes_a_world_defense_request_without_response_inflation() {
+        let expected = serde_json::json!({
+            "command": "GetServerGuildWarDefenseDeckList",
+            "wizard_id": 42
+        });
+        let encrypted = encrypt_payload(&serde_json::to_vec(&expected).unwrap());
+        assert_eq!(decode_request(encrypted.as_bytes()).unwrap(), expected);
     }
 
     #[test]

@@ -309,8 +309,7 @@ button:disabled { cursor: wait; opacity: .48; }
 }
 .bottom-actions .bottom-action { position: static; transform: none; }
 .proxy-actions .capture-account,
-.proxy-actions .capture-siege,
-.proxy-actions .capture-world-defense { width: 140px; }
+.proxy-actions .capture-siege { width: 140px; }
 
 .windows-certificate-steps {
   position: absolute;
@@ -458,6 +457,7 @@ button:disabled { cursor: wait; opacity: .48; }
   transform: none;
 }
 .json-screen .bottom-action { width: 190px; }
+.json-screen #include-world-defense { width: 260px; }
 
 .error-screen { display: grid; place-items: center; align-content: center; gap: 18px; padding: 0 70px; }
 .error-screen h1 { margin: 0; color: #f3f3f3; font-size: 25px; }

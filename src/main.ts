@@ -17,6 +17,7 @@ type Phase =
   | "proxy_setup"
   | "listening"
   | "siege_listening"
+  | "account_captured"
   | "world_defense_listening"
   | "captured"
   | "error";
@@ -66,7 +67,10 @@ const elements = {
   stopSiegeListening: document.querySelector<HTMLButtonElement>("#stop-siege-listening")!,
   captureAccount: Array.from(document.querySelectorAll<HTMLButtonElement>(".capture-account")),
   captureSiege: Array.from(document.querySelectorAll<HTMLButtonElement>(".capture-siege")),
-  captureWorldDefense: Array.from(document.querySelectorAll<HTMLButtonElement>(".capture-world-defense")),
+  includeWorldDefense: document.querySelector<HTMLButtonElement>("#include-world-defense")!,
+  worldDefenseStatus: document.querySelector<HTMLElement>("#world-defense-status")!,
+  exportStatus: document.querySelector<HTMLElement>("#export-status")!,
+  exportReminder: document.querySelector<HTMLElement>("#export-reminder")!,
   waitingAccountCopy: document.querySelector<HTMLElement>("#waiting-account-copy")!,
   waitingWorldDefenseCopy: document.querySelector<HTMLElement>("#waiting-world-defense-copy")!,
   waitingWorldDefenseGuide: document.querySelector<HTMLElement>("#waiting-world-defense-guide")!,
@@ -172,7 +176,7 @@ async function selectSteamDevice(): Promise<void> {
 
 async function changeGameDevice(): Promise<void> {
   stopPolling();
-  if (["certificate_setup", "windows_certificate_setup", "proxy_setup", "listening", "siege_listening", "world_defense_listening"].includes(latestStatus?.phase ?? "")) {
+  if (["certificate_setup", "windows_certificate_setup", "proxy_setup", "listening", "siege_listening", "account_captured", "world_defense_listening"].includes(latestStatus?.phase ?? "")) {
     try {
       const command = selectedGameDevice() === "steam" ? "cancel_steam_export" : "cancel_export";
       latestStatus = await invoke<StatusSnapshot>(command);
@@ -205,10 +209,13 @@ function updateStatus(status: StatusSnapshot): void {
     elements.waitingAccountCopy.hidden = worldDefense;
     elements.waitingWorldDefenseCopy.hidden = !worldDefense;
     elements.waitingWorldDefenseGuide.hidden = !worldDefense;
+    elements.worldDefenseStatus.hidden = !worldDefense || !status.message;
+    elements.worldDefenseStatus.textContent = status.message;
+    elements.stopListening.textContent = worldDefense ? "Terminer sans World" : "Arrêter l’écoute";
     showScreen(elements.waitingScreen);
   } else if (status.phase === "siege_listening") {
     showScreen(elements.siegeScreen);
-  } else if (status.phase === "captured") {
+  } else if (status.phase === "captured" || status.phase === "account_captured") {
     showScreen(elements.jsonScreen);
   } else {
     elements.errorMessage.textContent = status.message;
@@ -230,7 +237,10 @@ function updateStatus(status: StatusSnapshot): void {
     }).then((url) => { elements.certificateQr.src = url; });
   }
 
-  if (status.phase === "captured") {
+  if (status.phase === "captured" || status.phase === "account_captured") {
+    elements.includeWorldDefense.hidden = status.phase !== "account_captured";
+    elements.exportStatus.textContent = status.message;
+    elements.exportReminder.hidden = status.phase === "account_captured";
     elements.exportName.textContent = status.profileName
       ? `${status.profileName}.json`
       : "Compte.json";
@@ -262,7 +272,7 @@ function updateStatus(status: StatusSnapshot): void {
   elements.windowsCertificateAction.disabled = actionInProgress;
   elements.captureAccount.forEach((button) => { button.disabled = actionInProgress; });
   elements.captureSiege.forEach((button) => { button.disabled = actionInProgress; });
-  elements.captureWorldDefense.forEach((button) => { button.disabled = actionInProgress; });
+  elements.includeWorldDefense.disabled = actionInProgress;
 }
 
 async function refreshStatus(): Promise<void> {
@@ -556,12 +566,8 @@ window.addEventListener("DOMContentLoaded", () => {
   elements.certificateDone.addEventListener("click", () => {
     void runAction("complete_certificate_setup");
   });
-  const startCapture = (mode: "account" | "siege" | "world_defense") => {
-    const command = {
-      account: "start_account_capture",
-      siege: "start_siege_capture",
-      world_defense: "start_world_defense_capture",
-    }[mode];
+  const startCapture = (mode: "account" | "siege") => {
+    const command = mode === "account" ? "start_account_capture" : "start_siege_capture";
     void runAction(command, { steamMode: selectedGameDevice() === "steam" });
   };
   elements.captureAccount.forEach((button) => {
@@ -570,10 +576,14 @@ window.addEventListener("DOMContentLoaded", () => {
   elements.captureSiege.forEach((button) => {
     button.addEventListener("click", () => { startCapture("siege"); });
   });
-  elements.captureWorldDefense.forEach((button) => {
-    button.addEventListener("click", () => { startCapture("world_defense"); });
+  elements.includeWorldDefense.addEventListener("click", () => {
+    void runAction("start_world_defense_capture");
   });
   elements.stopListening.addEventListener("click", () => {
+    if (latestStatus?.phase === "world_defense_listening") {
+      void runAction("finish_account_without_world");
+      return;
+    }
     void runAction(selectedGameDevice() === "steam" ? "cancel_steam_export" : "cancel_export");
   });
   elements.stopSiegeListening.addEventListener("click", () => {

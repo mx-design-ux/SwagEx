@@ -2,8 +2,8 @@ use crate::{
     certificate::{
         certificate_der_path, ensure_certificate, mobileconfig_profile, regenerate_certificate,
     },
-    export::{write_profile, write_world_defense},
-    protocol::decode_profile,
+    export::{WORLD_DEFENSE_COMMAND, merge_world_defenses, write_profile},
+    protocol::{decode_profile, decode_request},
     setup::{self, SetupSettings},
     siege::{SiegeCapture, SiegeProgress},
     steam::SteamRouteState,
@@ -173,42 +173,68 @@ impl SharedState {
         *self.status.lock().expect("status mutex poisoned") = status;
     }
 
-    fn record_export(&self, path: PathBuf, display_name: String) {
-        let mut status = self.status.lock().expect("status mutex poisoned");
-        status.phase = "captured".into();
-        status.message = "Le JSON a été créé.".into();
-        status.export_path = Some(path.to_string_lossy().into_owned());
-        status.profile_name = Some(display_name);
-    }
-
-    fn record_world_defense(
+    fn record_account_response(
         &self,
-        response: &serde_json::Value,
+        response: &Value,
         directory: &Path,
+        world_wizard_id: Option<i64>,
         listener: &CancellationToken,
     ) {
         let mut status = self.status.lock().expect("status mutex poisoned");
-        if listener.is_cancelled()
-            || !matches!(
-                status.phase.as_str(),
-                "proxy_setup" | "world_defense_listening"
-            )
-        {
+        if listener.is_cancelled() {
             return;
         }
-        match write_world_defense(response, directory) {
-            Ok(Some(export)) => {
-                status.phase = "captured".into();
-                status.message = "Le JSON des défenses World a été créé.".into();
+        let command = response.get("command").and_then(Value::as_str);
+        if matches!(status.phase.as_str(), "proxy_setup" | "listening")
+            && matches!(command, Some("HubUserLogin" | "GuestLogin"))
+        {
+            if let Ok(export) = write_profile(response, directory) {
+                status.phase = "account_captured".into();
+                status.message = "Le JSON du compte a été créé.".into();
                 status.export_path = Some(export.path.to_string_lossy().into_owned());
                 status.profile_name = Some(export.display_name);
             }
-            Ok(None) => {}
-            Err(error) => {
-                status.phase = "error".into();
-                status.message = format!("Impossible d’écrire les défenses World : {error}");
+        } else if status.phase == "world_defense_listening"
+            && command == Some(WORLD_DEFENSE_COMMAND)
+            && response["ret_code"].as_i64() == Some(0)
+        {
+            let Some((path, wizard_id)) = status.export_path.as_deref().zip(world_wizard_id) else {
+                status.message = "Impossible d’identifier le compte de cette réponse World. Rouvre la défense ou termine avec le JSON du compte.".into();
+                return;
+            };
+            match merge_world_defenses(Path::new(path), wizard_id, response) {
+                Ok(()) => {
+                    status.phase = "captured".into();
+                    status.message =
+                        "Les défenses World sont incluses dans le JSON du compte.".into();
+                }
+                Err(error) => {
+                    status.message = format!(
+                        "Le JSON du compte est disponible. Défenses World non ajoutées. {error}"
+                    );
+                }
             }
         }
+    }
+
+    fn begin_world_defense(&self) -> Result<StatusSnapshot, String> {
+        let mut status = self.status.lock().expect("status mutex poisoned");
+        if status.phase != "account_captured" || status.export_path.is_none() {
+            return Err("Capture d’abord le compte.".into());
+        }
+        status.phase = "world_defense_listening".into();
+        status.message.clear();
+        Ok(status.clone())
+    }
+
+    fn finish_account_without_world(&self) -> Result<StatusSnapshot, String> {
+        let mut status = self.status.lock().expect("status mutex poisoned");
+        if status.phase != "world_defense_listening" {
+            return Err("Aucune capture World en cours.".into());
+        }
+        status.phase = "captured".into();
+        status.message = "Le JSON du compte a été créé.".into();
+        Ok(status.clone())
     }
 
     fn finish_listener_setup(
@@ -247,7 +273,7 @@ impl SharedState {
 
     fn record_proxy_error(&self, error: impl std::fmt::Display) {
         let mut status = self.status.lock().expect("status mutex poisoned");
-        if status.phase != "captured" {
+        if !matches!(status.phase.as_str(), "account_captured" | "captured") {
             status.phase = "error".into();
             status.message = format!("Le proxy s'est arrêté : {error}");
         }
@@ -259,7 +285,6 @@ enum CaptureMode {
     Disabled,
     Account,
     Siege,
-    WorldDefense,
 }
 
 pub struct AppState {
@@ -295,6 +320,7 @@ impl Drop for AppState {
 struct CaptureHandler {
     capture_mode: CaptureMode,
     is_profile_request: bool,
+    world_wizard_id: Option<Arc<Mutex<Option<i64>>>>,
     certificate_der: Arc<Vec<u8>>,
     certificate_profile: Arc<Vec<u8>>,
     output_directory: Arc<PathBuf>,
@@ -447,6 +473,30 @@ impl HttpHandler for CaptureHandler {
         }
 
         self.is_profile_request = request.uri().path() == PROFILE_PATH;
+        self.world_wizard_id = None;
+        if self.is_profile_request
+            && self.capture_mode == CaptureMode::Account
+            && self.shared.snapshot().phase == "world_defense_listening"
+        {
+            let wizard_id = Arc::new(Mutex::new(None));
+            self.world_wizard_id = Some(Arc::clone(&wizard_id));
+            let (parts, body) = request.into_parts();
+            let headers = parts.headers.clone();
+            let observer = ObservedBody::new(
+                body,
+                Box::new(move |collected| {
+                    let body = decode_http_body(&headers, &collected).unwrap_or(collected);
+                    let Ok(request) = decode_request(&body) else {
+                        return;
+                    };
+                    if request["command"].as_str() == Some(WORLD_DEFENSE_COMMAND) {
+                        let id = request["wizard_id"].as_i64().filter(|id| *id > 0);
+                        *wizard_id.lock().expect("request identity mutex poisoned") = id;
+                    }
+                }),
+            );
+            return Request::from_parts(parts, Body::from(BoxBody::new(observer))).into();
+        }
         request.into()
     }
 
@@ -465,34 +515,26 @@ impl HttpHandler for CaptureHandler {
             CaptureMode::Account => {
                 let output_directory = Arc::clone(&self.output_directory);
                 let shared = Arc::clone(&self.shared);
-                Box::new(move |collected| {
-                    tokio::task::spawn_blocking(move || {
-                        if shared.snapshot().phase == "captured" {
-                            return None;
-                        }
-                        let capture_body = decode_http_body(&headers, &collected)
-                            .unwrap_or_else(|| collected.to_vec());
-                        let profile = decode_profile(&capture_body).ok()?;
-                        let command = profile.get("command").and_then(Value::as_str)?;
-                        if !matches!(command, "HubUserLogin" | "GuestLogin") {
-                            return None;
-                        }
-                        let exported = write_profile(&profile, &output_directory).ok()?;
-                        shared.record_export(exported.path, exported.display_name);
-                        Some(())
-                    });
-                })
-            }
-            CaptureMode::WorldDefense => {
-                let output_directory = Arc::clone(&self.output_directory);
-                let shared = Arc::clone(&self.shared);
                 let listener = self.listener.clone();
+                let world_wizard_id = self.world_wizard_id.take();
                 Box::new(move |collected| {
                     tokio::task::spawn_blocking(move || {
-                        let capture_body = decode_http_body(&headers, &collected)
-                            .unwrap_or_else(|| collected.to_vec());
+                        if !matches!(
+                            shared.snapshot().phase.as_str(),
+                            "proxy_setup" | "listening" | "world_defense_listening"
+                        ) {
+                            return None;
+                        }
+                        let capture_body =
+                            decode_http_body(&headers, &collected).unwrap_or(collected);
                         let response = decode_profile(&capture_body).ok()?;
-                        shared.record_world_defense(&response, &output_directory, &listener);
+                        let wizard_id = world_wizard_id.and_then(|id| *id.lock().ok()?);
+                        shared.record_account_response(
+                            &response,
+                            &output_directory,
+                            wizard_id,
+                            &listener,
+                        );
                         Some(())
                     });
                 })
@@ -704,9 +746,6 @@ async fn start_proxy(
             "listening" if steam_mode => "Lancez Summoners War depuis Steam.".into(),
             "listening" => "Ouvrez Summoners War sur l’appareil Apple configuré.".into(),
             "siege_listening" => "Suivez les trois étapes dans Summoners War.".into(),
-            "world_defense_listening" => {
-                "Ouvrez le placement des défenses World dans Summoners War.".into()
-            }
             _ => "".into(),
         },
         certificate_setup_completed: settings.certificate_setup_completed,
@@ -723,10 +762,7 @@ async fn start_proxy(
         siege_attack_log_captured: false,
         siege_defense_log_captured: false,
     };
-    let settles = matches!(
-        phase,
-        "listening" | "siege_listening" | "world_defense_listening"
-    );
+    let settles = matches!(phase, "listening" | "siege_listening");
     let show_startup_status = || {
         let initial = if settles {
             StatusSnapshot {
@@ -743,6 +779,7 @@ async fn start_proxy(
     let handler = CaptureHandler {
         capture_mode,
         is_profile_request: false,
+        world_wizard_id: None,
         certificate_der,
         certificate_profile,
         output_directory: Arc::new(output_directory),
@@ -1237,7 +1274,6 @@ async fn start_capture_mode(
     let phase = match capture_mode {
         CaptureMode::Account => "listening",
         CaptureMode::Siege => "siege_listening",
-        CaptureMode::WorldDefense => "world_defense_listening",
         CaptureMode::Disabled => return Err("Mode d’export indisponible.".into()),
     };
     start_proxy(app, state, capture_mode, phase, false, steam_mode)
@@ -1255,12 +1291,23 @@ pub async fn start_account_capture(
 }
 
 #[tauri::command]
-pub async fn start_world_defense_capture(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    steam_mode: bool,
-) -> Result<StatusSnapshot, String> {
-    start_capture_mode(app, &state, CaptureMode::WorldDefense, steam_mode).await
+pub fn start_world_defense_capture(state: State<'_, AppState>) -> Result<StatusSnapshot, String> {
+    let active = state
+        .cancel
+        .lock()
+        .map_err(|_| "état interne indisponible")?;
+    if !active
+        .as_ref()
+        .is_some_and(|listener| !listener.is_cancelled())
+    {
+        return Err("Relance l’export Compte pour inclure les défenses World.".into());
+    }
+    state.shared.begin_world_defense()
+}
+
+#[tauri::command]
+pub fn finish_account_without_world(state: State<'_, AppState>) -> Result<StatusSnapshot, String> {
+    state.shared.finish_account_without_world()
 }
 
 #[tauri::command]
@@ -1358,7 +1405,7 @@ mod tests {
     }
 
     #[test]
-    fn world_defense_received_while_listener_settles_is_retained() {
+    fn account_capture_can_be_enriched_by_the_same_listener() {
         let directory = tempfile::tempdir().unwrap();
         let settings = SetupSettings::default();
         let shared = SharedState {
@@ -1368,25 +1415,30 @@ mod tests {
             }),
         };
         let listener = CancellationToken::new();
-        let cancelled_listener = CancellationToken::new();
-        cancelled_listener.cancel();
-        let response = serde_json::json!({
-            "command": "GetServerGuildWarDefenseDeckList",
-            "ret_code": 0,
+        let profile = serde_json::json!({
+            "command": "HubUserLogin", "wizard_id": 42,
+            "building_list": [], "unit_list": [], "runes": []
         });
+        shared.record_account_response(&profile, directory.path(), None, &listener);
+        let account = shared.finish_listener_setup(StatusSnapshot::idle(settings), &listener);
+        assert_eq!(account.phase, "account_captured");
+        let path = account.export_path.unwrap();
+        let old = std::fs::read(&path).unwrap();
+        let response = serde_json::json!({"command": WORLD_DEFENSE_COMMAND, "ret_code": 0});
+        shared.record_account_response(&response, directory.path(), Some(42), &listener);
+        assert_eq!(std::fs::read(&path).unwrap(), old);
 
-        shared.record_world_defense(&response, directory.path(), &cancelled_listener);
-        assert_eq!(shared.snapshot().phase, "proxy_setup");
-        shared.record_world_defense(&response, directory.path(), &listener);
-        let observed = shared.finish_listener_setup(
-            StatusSnapshot {
-                phase: "world_defense_listening".into(),
-                ..StatusSnapshot::idle(settings)
-            },
-            &listener,
+        shared.begin_world_defense().unwrap();
+        shared.record_account_response(&response, directory.path(), Some(99), &listener);
+        assert_eq!(shared.snapshot().phase, "world_defense_listening");
+        assert_eq!(std::fs::read(&path).unwrap(), old);
+        shared.record_account_response(&response, directory.path(), Some(42), &listener);
+        assert_eq!(shared.snapshot().phase, "captured");
+        assert_eq!(
+            shared.snapshot().export_path.as_deref(),
+            Some(path.as_str())
         );
-        assert_eq!(observed.phase, "captured");
-        assert!(Path::new(&observed.export_path.unwrap()).is_file());
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
     }
 
     #[tokio::test]

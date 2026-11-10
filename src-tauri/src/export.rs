@@ -6,6 +6,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub const WORLD_DEFENSE_COMMAND: &str = "GetServerGuildWarDefenseDeckList";
+
 #[derive(Debug, Clone)]
 pub struct ExportedProfile {
     pub path: PathBuf,
@@ -23,10 +25,7 @@ pub fn write_profile(profile: &Value, output_directory: &Path) -> anyhow::Result
         .map(str::trim)
         .filter(|name| !name.is_empty())
         .unwrap_or("Compte");
-    let wizard_id = wizard_info
-        .and_then(|info| info.get("wizard_id"))
-        .and_then(Value::as_i64)
-        .or_else(|| profile.get("wizard_id").and_then(Value::as_i64))
+    let wizard_id = account_wizard_id(profile)
         .map(|id| id.to_string())
         .unwrap_or_else(|| "profil".to_string());
 
@@ -50,30 +49,43 @@ pub fn write_profile(profile: &Value, output_directory: &Path) -> anyhow::Result
     })
 }
 
-pub fn write_world_defense(
-    response: &Value,
-    output_directory: &Path,
-) -> anyhow::Result<Option<ExportedProfile>> {
-    if response.get("command").and_then(Value::as_str) != Some("GetServerGuildWarDefenseDeckList")
-        || response.get("ret_code").and_then(Value::as_i64) != Some(0)
-    {
-        return Ok(None);
-    }
+fn account_wizard_id(profile: &Value) -> Option<i64> {
+    profile
+        .pointer("/wizard_info/wizard_id")
+        .and_then(Value::as_i64)
+        .or_else(|| profile.get("wizard_id").and_then(Value::as_i64))
+}
 
-    let directory = output_directory.join("world-defenses");
-    fs::create_dir_all(&directory)?;
-    let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S-%9f");
-    let display_name = format!("world-defense-{timestamp}");
-    let path = directory.join(format!("{display_name}.json"));
-    let temporary_path = directory.join(format!(".{display_name}.tmp"));
-    let contents = serde_json::to_vec_pretty(response)?;
+pub fn merge_world_defenses(
+    path: &Path,
+    request_wizard_id: i64,
+    response: &Value,
+) -> anyhow::Result<()> {
+    let mut profile: Value = serde_json::from_slice(&fs::read(path)?)?;
+    validate_profile(&profile)?;
+    if account_wizard_id(&profile) != Some(request_wizard_id)
+        || response
+            .get("wizard_id")
+            .and_then(Value::as_i64)
+            .is_some_and(|id| id != request_wizard_id)
+    {
+        anyhow::bail!("La défense World reçue appartient à un autre compte.");
+    }
+    profile["swagex_world_defense"] = serde_json::json!({
+        "wizard_id": request_wizard_id,
+        "captured_at": chrono::Utc::now().to_rfc3339(),
+        "response": response,
+    });
+
+    let temporary_path = path.with_extension("world.tmp");
+    let contents = serde_json::to_vec_pretty(&profile)?;
     let saved =
-        fs::write(&temporary_path, contents).and_then(|()| fs::rename(&temporary_path, &path));
+        fs::write(&temporary_path, contents).and_then(|()| fs::rename(&temporary_path, path));
     if let Err(error) = saved {
         let _ = fs::remove_file(&temporary_path);
         return Err(error.into());
     }
-    Ok(Some(ExportedProfile { path, display_name }))
+    Ok(())
 }
 
 fn canonicalize_profile(profile: &mut Value) {
@@ -312,38 +324,37 @@ mod tests {
     }
 
     #[test]
-    fn exports_only_the_successful_world_defense_response_without_reordering() {
+    fn merges_world_defense_into_the_same_account_export_only() {
         let dir = tempfile::tempdir().unwrap();
-        for response in [
-            serde_json::json!({"command": "HubUserLogin", "ret_code": 0}),
-            serde_json::json!({"command": "GetServerGuildWarDefenseDeckList", "ret_code": 9}),
-        ] {
-            assert!(
-                write_world_defense(&response, dir.path())
-                    .unwrap()
-                    .is_none()
-            );
-        }
-        assert!(!dir.path().join("world-defenses").exists());
-
+        let profile = serde_json::json!({
+            "command": "HubUserLogin",
+            "wizard_info": {"wizard_id": 42, "wizard_name": "Test"},
+            "building_list": [],
+            "unit_list": [],
+            "runes": [],
+            "guildsiege_defense_deck_unit_list": [{"unit_id_list": [5, 4, 3]}]
+        });
         let response = serde_json::json!({
-            "command": "GetServerGuildWarDefenseDeckList",
+            "command": WORLD_DEFENSE_COMMAND,
             "ret_code": 0,
             "example_payload": [{"unit_id_list": [30, 20, 10]}]
         });
-        let export = write_world_defense(&response, dir.path()).unwrap().unwrap();
-        assert_eq!(
-            export.path.parent(),
-            Some(dir.path().join("world-defenses").as_path())
-        );
-        assert_eq!(
-            serde_json::from_slice::<Value>(&fs::read(&export.path).unwrap()).unwrap(),
-            response
-        );
-        assert_eq!(
-            fs::read_dir(export.path.parent().unwrap()).unwrap().count(),
-            1
-        );
+        let export = write_profile(&profile, dir.path()).unwrap();
+        let before = fs::read(&export.path).unwrap();
+        assert!(merge_world_defenses(&export.path, 99, &response).is_err());
+        assert_eq!(fs::read(&export.path).unwrap(), before);
+
+        merge_world_defenses(&export.path, 42, &response).unwrap();
+        let mut merged: Value = serde_json::from_slice(&fs::read(&export.path).unwrap()).unwrap();
+        assert_eq!(merged["swagex_world_defense"]["wizard_id"], 42);
+        assert_eq!(merged["swagex_world_defense"]["response"], response);
+        assert!(merged["swagex_world_defense"]["captured_at"].is_string());
+        merged
+            .as_object_mut()
+            .unwrap()
+            .remove("swagex_world_defense");
+        assert_eq!(merged, serde_json::from_slice::<Value>(&before).unwrap());
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
     #[test]
