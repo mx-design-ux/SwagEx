@@ -50,6 +50,32 @@ pub fn write_profile(profile: &Value, output_directory: &Path) -> anyhow::Result
     })
 }
 
+pub fn write_world_defense(
+    response: &Value,
+    output_directory: &Path,
+) -> anyhow::Result<Option<ExportedProfile>> {
+    if response.get("command").and_then(Value::as_str) != Some("GetServerGuildWarDefenseDeckList")
+        || response.get("ret_code").and_then(Value::as_i64) != Some(0)
+    {
+        return Ok(None);
+    }
+
+    let directory = output_directory.join("world-defenses");
+    fs::create_dir_all(&directory)?;
+    let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S-%9f");
+    let display_name = format!("world-defense-{timestamp}");
+    let path = directory.join(format!("{display_name}.json"));
+    let temporary_path = directory.join(format!(".{display_name}.tmp"));
+    let contents = serde_json::to_vec_pretty(response)?;
+    let saved =
+        fs::write(&temporary_path, contents).and_then(|()| fs::rename(&temporary_path, &path));
+    if let Err(error) = saved {
+        let _ = fs::remove_file(&temporary_path);
+        return Err(error.into());
+    }
+    Ok(Some(ExportedProfile { path, display_name }))
+}
+
 fn canonicalize_profile(profile: &mut Value) {
     let storage_id = storage_building_id(profile);
 
@@ -283,6 +309,41 @@ mod tests {
             .iter()
             .filter_map(|entry| number_field(entry, key))
             .collect()
+    }
+
+    #[test]
+    fn exports_only_the_successful_world_defense_response_without_reordering() {
+        let dir = tempfile::tempdir().unwrap();
+        for response in [
+            serde_json::json!({"command": "HubUserLogin", "ret_code": 0}),
+            serde_json::json!({"command": "GetServerGuildWarDefenseDeckList", "ret_code": 9}),
+        ] {
+            assert!(
+                write_world_defense(&response, dir.path())
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        assert!(!dir.path().join("world-defenses").exists());
+
+        let response = serde_json::json!({
+            "command": "GetServerGuildWarDefenseDeckList",
+            "ret_code": 0,
+            "example_payload": [{"unit_id_list": [30, 20, 10]}]
+        });
+        let export = write_world_defense(&response, dir.path()).unwrap().unwrap();
+        assert_eq!(
+            export.path.parent(),
+            Some(dir.path().join("world-defenses").as_path())
+        );
+        assert_eq!(
+            serde_json::from_slice::<Value>(&fs::read(&export.path).unwrap()).unwrap(),
+            response
+        );
+        assert_eq!(
+            fs::read_dir(export.path.parent().unwrap()).unwrap().count(),
+            1
+        );
     }
 
     #[test]

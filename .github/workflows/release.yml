@@ -61,7 +61,9 @@ jobs:
           tagName: v__VERSION__
           releaseName: SwagEx v__VERSION__
           releaseBody: |
-            Adapte automatiquement le JSON Siège aux sièges actifs et aux intersièges.
+            Ajoute le mode Défenses World pour exporter localement les formations enregistrées du Combat de guilde World.
+
+            Dans SwagEx, cliquez sur **Défenses World**, puis ouvrez **Tour de Guilde → Combat → Combat de guilde World → Défense** dans Summoners War. SwagEx affiche le chemin du fichier JSON une fois la liste capturée.
           releaseDraft: false
           prerelease: false
           uploadUpdaterJson: true

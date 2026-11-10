@@ -17,6 +17,7 @@ type Phase =
   | "proxy_setup"
   | "listening"
   | "siege_listening"
+  | "world_defense_listening"
   | "captured"
   | "error";
 
@@ -65,6 +66,10 @@ const elements = {
   stopSiegeListening: document.querySelector<HTMLButtonElement>("#stop-siege-listening")!,
   captureAccount: Array.from(document.querySelectorAll<HTMLButtonElement>(".capture-account")),
   captureSiege: Array.from(document.querySelectorAll<HTMLButtonElement>(".capture-siege")),
+  captureWorldDefense: Array.from(document.querySelectorAll<HTMLButtonElement>(".capture-world-defense")),
+  waitingAccountCopy: document.querySelector<HTMLElement>("#waiting-account-copy")!,
+  waitingWorldDefenseCopy: document.querySelector<HTMLElement>("#waiting-world-defense-copy")!,
+  waitingWorldDefenseGuide: document.querySelector<HTMLElement>("#waiting-world-defense-guide")!,
   siegeMatchupStep: document.querySelector<HTMLElement>("[data-siege-step='matchup']")!,
   siegeAttackStep: document.querySelector<HTMLElement>("[data-siege-step='attack']")!,
   siegeDefenseStep: document.querySelector<HTMLElement>("[data-siege-step='defense']")!,
@@ -167,7 +172,7 @@ async function selectSteamDevice(): Promise<void> {
 
 async function changeGameDevice(): Promise<void> {
   stopPolling();
-  if (["certificate_setup", "windows_certificate_setup", "proxy_setup", "listening", "siege_listening"].includes(latestStatus?.phase ?? "")) {
+  if (["certificate_setup", "windows_certificate_setup", "proxy_setup", "listening", "siege_listening", "world_defense_listening"].includes(latestStatus?.phase ?? "")) {
     try {
       const command = selectedGameDevice() === "steam" ? "cancel_steam_export" : "cancel_export";
       latestStatus = await invoke<StatusSnapshot>(command);
@@ -195,7 +200,11 @@ function updateStatus(status: StatusSnapshot): void {
     } else {
       showScreen(elements.proxyScreen);
     }
-  } else if (status.phase === "listening") {
+  } else if (status.phase === "listening" || status.phase === "world_defense_listening") {
+    const worldDefense = status.phase === "world_defense_listening";
+    elements.waitingAccountCopy.hidden = worldDefense;
+    elements.waitingWorldDefenseCopy.hidden = !worldDefense;
+    elements.waitingWorldDefenseGuide.hidden = !worldDefense;
     showScreen(elements.waitingScreen);
   } else if (status.phase === "siege_listening") {
     showScreen(elements.siegeScreen);
@@ -253,6 +262,7 @@ function updateStatus(status: StatusSnapshot): void {
   elements.windowsCertificateAction.disabled = actionInProgress;
   elements.captureAccount.forEach((button) => { button.disabled = actionInProgress; });
   elements.captureSiege.forEach((button) => { button.disabled = actionInProgress; });
+  elements.captureWorldDefense.forEach((button) => { button.disabled = actionInProgress; });
 }
 
 async function refreshStatus(): Promise<void> {
@@ -546,8 +556,12 @@ window.addEventListener("DOMContentLoaded", () => {
   elements.certificateDone.addEventListener("click", () => {
     void runAction("complete_certificate_setup");
   });
-  const startCapture = (mode: "account" | "siege") => {
-    const command = mode === "account" ? "start_account_capture" : "start_siege_capture";
+  const startCapture = (mode: "account" | "siege" | "world_defense") => {
+    const command = {
+      account: "start_account_capture",
+      siege: "start_siege_capture",
+      world_defense: "start_world_defense_capture",
+    }[mode];
     void runAction(command, { steamMode: selectedGameDevice() === "steam" });
   };
   elements.captureAccount.forEach((button) => {
@@ -555,6 +569,9 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   elements.captureSiege.forEach((button) => {
     button.addEventListener("click", () => { startCapture("siege"); });
+  });
+  elements.captureWorldDefense.forEach((button) => {
+    button.addEventListener("click", () => { startCapture("world_defense"); });
   });
   elements.stopListening.addEventListener("click", () => {
     void runAction(selectedGameDevice() === "steam" ? "cancel_steam_export" : "cancel_export");

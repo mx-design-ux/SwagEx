@@ -73,6 +73,7 @@
           <div class="bottom-actions windows-capture-actions" id="windows-capture-actions" hidden>
             <button class="bottom-action primary-action capture-account" type="button">Compte</button>
             <button class="bottom-action secondary-action capture-siege" type="button">Siège</button>
+            <button class="bottom-action secondary-action capture-world-defense" type="button">Défenses World</button>
           </div>
         </section>
 
@@ -92,13 +93,21 @@
           <div class="bottom-actions proxy-actions">
             <button class="bottom-action primary-action capture-account" type="button">Compte</button>
             <button class="bottom-action secondary-action capture-siege" type="button">Siège</button>
+            <button class="bottom-action secondary-action capture-world-defense" type="button">Défenses World</button>
           </div>
         </section>
 
         <section class="flow-screen waiting-screen" id="waiting-screen" data-screen="waiting" hidden aria-labelledby="waiting-title">
           <img class="screen-monkey stage-monkey" src="/src/assets/ui/asset-monkey@2x.png" alt="" aria-hidden="true" />
           <div class="callout-layout">
-            <h1 id="waiting-title" class="callout-title">Lance le jeu,<br />j’attends…</h1>
+            <h1 id="waiting-title" class="callout-title">
+              <span id="waiting-account-copy">Lance le jeu,<br />j’attends…</span>
+              <span id="waiting-world-defense-copy" hidden>Défenses World</span>
+            </h1>
+            <div id="waiting-world-defense-guide" class="world-defense-guide" hidden>
+              <p>Dans Summoners War, ouvre <strong>Tour de Guilde → Combat → Combat de guilde World → Défense</strong>.</p>
+              <p>Si le placement de la défense est déjà ouvert, quitte cet écran puis rouvre-le.</p>
+            </div>
           </div>
           <button class="bottom-action secondary-action" id="stop-listening" type="button">Arrêter l’écoute</button>
         </section>

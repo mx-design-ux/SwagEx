@@ -309,7 +309,8 @@ button:disabled { cursor: wait; opacity: .48; }
 }
 .bottom-actions .bottom-action { position: static; transform: none; }
 .proxy-actions .capture-account,
-.proxy-actions .capture-siege { width: 140px; }
+.proxy-actions .capture-siege,
+.proxy-actions .capture-world-defense { width: 140px; }
 
 .windows-certificate-steps {
   position: absolute;
@@ -370,6 +371,13 @@ button:disabled { cursor: wait; opacity: .48; }
   font-weight: 400;
   line-height: 46px;
 }
+
+.world-defense-guide {
+  margin-top: 14px;
+  font-size: 17px;
+  line-height: 1.45;
+}
+.world-defense-guide p { margin: 0 0 12px; }
 
 @keyframes content-appear {
   from { opacity: 0; }

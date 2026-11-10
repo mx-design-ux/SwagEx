@@ -2,7 +2,7 @@ use crate::{
     certificate::{
         certificate_der_path, ensure_certificate, mobileconfig_profile, regenerate_certificate,
     },
-    export::write_profile,
+    export::{write_profile, write_world_defense},
     protocol::decode_profile,
     setup::{self, SetupSettings},
     siege::{SiegeCapture, SiegeProgress},
@@ -181,6 +181,26 @@ impl SharedState {
         status.profile_name = Some(display_name);
     }
 
+    fn record_world_defense(&self, response: &serde_json::Value, directory: &Path) {
+        let mut status = self.status.lock().expect("status mutex poisoned");
+        if status.phase != "world_defense_listening" {
+            return;
+        }
+        match write_world_defense(response, directory) {
+            Ok(Some(export)) => {
+                status.phase = "captured".into();
+                status.message = "Le JSON des défenses World a été créé.".into();
+                status.export_path = Some(export.path.to_string_lossy().into_owned());
+                status.profile_name = Some(export.display_name);
+            }
+            Ok(None) => {}
+            Err(error) => {
+                status.phase = "error".into();
+                status.message = format!("Impossible d’écrire les défenses World : {error}");
+            }
+        }
+    }
+
     fn record_siege_export(&self, path: PathBuf, display_name: String) {
         let mut status = self.status.lock().expect("status mutex poisoned");
         if status.phase != "siege_listening" {
@@ -217,6 +237,7 @@ enum CaptureMode {
     Disabled,
     Account,
     Siege,
+    WorldDefense,
 }
 
 pub struct AppState {
@@ -435,6 +456,19 @@ impl HttpHandler for CaptureHandler {
                         }
                         let exported = write_profile(&profile, &output_directory).ok()?;
                         shared.record_export(exported.path, exported.display_name);
+                        Some(())
+                    });
+                })
+            }
+            CaptureMode::WorldDefense => {
+                let output_directory = Arc::clone(&self.output_directory);
+                let shared = Arc::clone(&self.shared);
+                Box::new(move |collected| {
+                    tokio::task::spawn_blocking(move || {
+                        let capture_body = decode_http_body(&headers, &collected)
+                            .unwrap_or_else(|| collected.to_vec());
+                        let response = decode_profile(&capture_body).ok()?;
+                        shared.record_world_defense(&response, &output_directory);
                         Some(())
                     });
                 })
@@ -704,6 +738,9 @@ async fn start_proxy(
             "listening" if steam_mode => "Lancez Summoners War depuis Steam.".into(),
             "listening" => "Ouvrez Summoners War sur l’appareil Apple configuré.".into(),
             "siege_listening" => "Suivez les trois étapes dans Summoners War.".into(),
+            "world_defense_listening" => {
+                "Ouvrez le placement des défenses World dans Summoners War.".into()
+            }
             _ => "".into(),
         },
         certificate_setup_completed: settings.certificate_setup_completed,
@@ -720,7 +757,10 @@ async fn start_proxy(
         siege_attack_log_captured: false,
         siege_defense_log_captured: false,
     };
-    if matches!(phase, "listening" | "siege_listening") {
+    if matches!(
+        phase,
+        "listening" | "siege_listening" | "world_defense_listening"
+    ) {
         state.shared.replace(StatusSnapshot {
             phase: "proxy_setup".into(),
             message: "Démarrage de l’écoute…".into(),
@@ -752,7 +792,10 @@ async fn start_proxy(
         });
     }
 
-    if matches!(phase, "listening" | "siege_listening") {
+    if matches!(
+        phase,
+        "listening" | "siege_listening" | "world_defense_listening"
+    ) {
         // Binding the socket makes the port available, but the newly spawned
         // proxy task still needs to be polled before it can accept the game's
         // first connection. Do not expose the waiting screen until that task
@@ -1169,6 +1212,7 @@ async fn start_capture_mode(
     let phase = match capture_mode {
         CaptureMode::Account => "listening",
         CaptureMode::Siege => "siege_listening",
+        CaptureMode::WorldDefense => "world_defense_listening",
         CaptureMode::Disabled => return Err("Mode d’export indisponible.".into()),
     };
     start_proxy(app, state, capture_mode, phase, false, steam_mode)
@@ -1183,6 +1227,15 @@ pub async fn start_account_capture(
     steam_mode: bool,
 ) -> Result<StatusSnapshot, String> {
     start_capture_mode(app, &state, CaptureMode::Account, steam_mode).await
+}
+
+#[tauri::command]
+pub async fn start_world_defense_capture(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    steam_mode: bool,
+) -> Result<StatusSnapshot, String> {
+    start_capture_mode(app, &state, CaptureMode::WorldDefense, steam_mode).await
 }
 
 #[tauri::command]
