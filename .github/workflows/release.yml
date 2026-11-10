@@ -2,9 +2,6 @@ name: Release SwagEx
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
 
 permissions:
   contents: write
@@ -15,15 +12,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
+          - platform: macos-15
             target: aarch64-apple-darwin
             bundles: app,dmg
-          - platform: macos-15-intel
-            target: x86_64-apple-darwin
-            bundles: app,dmg
-          - platform: windows-latest
-            target: x86_64-pc-windows-msvc
-            bundles: nsis
     runs-on: ${{ matrix.platform }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -36,6 +27,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v0.5.1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -77,6 +70,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v0.5.1
 
       - name: Keep the download list user-friendly
         env:
