@@ -63,7 +63,7 @@ jobs:
           releaseBody: |
             Ajoute le mode Défenses World pour exporter localement les formations enregistrées du Combat de guilde World.
 
-            Dans SwagEx, cliquez sur **Défenses World**, puis ouvrez **Tour de Guilde → Combat → Combat de guilde World → Défense** dans Summoners War. SwagEx affiche le chemin du fichier JSON une fois la liste capturée.
+            Dans SwagEx, cliquez sur **Défenses World**, puis ouvrez **Tour de Guilde → Combat → Combat de guilde World → Défense** dans Summoners War. Le nom du fichier JSON apparaît dans SwagEx une fois la liste capturée.
           releaseDraft: false
           prerelease: false
           uploadUpdaterJson: true

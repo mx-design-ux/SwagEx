@@ -181,9 +181,19 @@ impl SharedState {
         status.profile_name = Some(display_name);
     }
 
-    fn record_world_defense(&self, response: &serde_json::Value, directory: &Path) {
+    fn record_world_defense(
+        &self,
+        response: &serde_json::Value,
+        directory: &Path,
+        listener: &CancellationToken,
+    ) {
         let mut status = self.status.lock().expect("status mutex poisoned");
-        if status.phase != "world_defense_listening" {
+        if listener.is_cancelled()
+            || !matches!(
+                status.phase.as_str(),
+                "proxy_setup" | "world_defense_listening"
+            )
+        {
             return;
         }
         match write_world_defense(response, directory) {
@@ -199,6 +209,18 @@ impl SharedState {
                 status.message = format!("Impossible d’écrire les défenses World : {error}");
             }
         }
+    }
+
+    fn finish_listener_setup(
+        &self,
+        listening: StatusSnapshot,
+        listener: &CancellationToken,
+    ) -> StatusSnapshot {
+        let mut status = self.status.lock().expect("status mutex poisoned");
+        if !listener.is_cancelled() && status.phase == "proxy_setup" {
+            *status = listening;
+        }
+        status.clone()
     }
 
     fn record_siege_export(&self, path: PathBuf, display_name: String) {
@@ -277,6 +299,7 @@ struct CaptureHandler {
     certificate_profile: Arc<Vec<u8>>,
     output_directory: Arc<PathBuf>,
     shared: Arc<SharedState>,
+    listener: CancellationToken,
     siege_capture: Arc<Mutex<SiegeCapture>>,
 }
 
@@ -463,12 +486,13 @@ impl HttpHandler for CaptureHandler {
             CaptureMode::WorldDefense => {
                 let output_directory = Arc::clone(&self.output_directory);
                 let shared = Arc::clone(&self.shared);
+                let listener = self.listener.clone();
                 Box::new(move |collected| {
                     tokio::task::spawn_blocking(move || {
                         let capture_body = decode_http_body(&headers, &collected)
                             .unwrap_or_else(|| collected.to_vec());
                         let response = decode_profile(&capture_body).ok()?;
-                        shared.record_world_defense(&response, &output_directory);
+                        shared.record_world_defense(&response, &output_directory, &listener);
                         Some(())
                     });
                 })
@@ -668,64 +692,6 @@ async fn start_proxy(
         anyhow::bail!("Le parcours Steam est disponible uniquement sous Windows.");
     }
 
-    let handler = CaptureHandler {
-        capture_mode,
-        is_profile_request: false,
-        certificate_der,
-        certificate_profile,
-        output_directory: Arc::new(output_directory),
-        shared: Arc::clone(&state.shared),
-        siege_capture: Arc::new(Mutex::new(SiegeCapture::default())),
-    };
-    let authority = RcgenAuthority::new(certificate.issuer, 128, aws_lc_rs::default_provider());
-
-    if steam_mode {
-        #[cfg(target_os = "windows")]
-        {
-            let prepared = prepared_steam_route
-                .ok_or_else(|| anyhow::anyhow!("préparation Steam indisponible"))?;
-            let (connector, websocket_connector) = upstream_connector(prepared.upstream_hosts())?;
-            let proxy = Proxy::builder()
-                .with_listener(listener)
-                .with_ca(authority)
-                .with_http_connector(connector)
-                .with_websocket_connector(websocket_connector)
-                .with_http_handler(handler)
-                .with_graceful_shutdown(cancel.clone().cancelled_owned())
-                .build()?;
-            let mut steam_route = state
-                .steam_route
-                .lock()
-                .map_err(|_| anyhow::anyhow!("état Steam indisponible"))?;
-            crate::steam::activate(&mut steam_route, prepared, proxy_address, cancel.clone())?;
-
-            let shared = Arc::clone(&state.shared);
-            let proxy_cancel = cancel.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(error) = proxy.start().await {
-                    shared.record_proxy_error(error);
-                    proxy_cancel.cancel();
-                }
-            });
-        }
-    } else {
-        let proxy = Proxy::builder()
-            .with_listener(listener)
-            .with_ca(authority)
-            .with_rustls_connector(aws_lc_rs::default_provider())
-            .with_http_handler(handler)
-            .with_graceful_shutdown(cancel.clone().cancelled_owned())
-            .build()?;
-        let shared = Arc::clone(&state.shared);
-        let proxy_cancel = cancel.clone();
-        tauri::async_runtime::spawn(async move {
-            if let Err(error) = proxy.start().await {
-                shared.record_proxy_error(error);
-                proxy_cancel.cancel();
-            }
-        });
-    }
-
     let status = StatusSnapshot {
         phase: phase.into(),
         message: match phase {
@@ -757,22 +723,88 @@ async fn start_proxy(
         siege_attack_log_captured: false,
         siege_defense_log_captured: false,
     };
-    if matches!(
+    let settles = matches!(
         phase,
         "listening" | "siege_listening" | "world_defense_listening"
-    ) {
-        state.shared.replace(StatusSnapshot {
-            phase: "proxy_setup".into(),
-            message: "Démarrage de l’écoute…".into(),
-            ..status.clone()
-        });
+    );
+    let show_startup_status = || {
+        let initial = if settles {
+            StatusSnapshot {
+                phase: "proxy_setup".into(),
+                message: "Démarrage de l’écoute…".into(),
+                ..status.clone()
+            }
+        } else {
+            status.clone()
+        };
+        state.shared.replace(initial);
+    };
+
+    let handler = CaptureHandler {
+        capture_mode,
+        is_profile_request: false,
+        certificate_der,
+        certificate_profile,
+        output_directory: Arc::new(output_directory),
+        shared: Arc::clone(&state.shared),
+        listener: cancel.clone(),
+        siege_capture: Arc::new(Mutex::new(SiegeCapture::default())),
+    };
+    let authority = RcgenAuthority::new(certificate.issuer, 128, aws_lc_rs::default_provider());
+
+    if steam_mode {
+        #[cfg(target_os = "windows")]
+        {
+            let prepared = prepared_steam_route
+                .ok_or_else(|| anyhow::anyhow!("préparation Steam indisponible"))?;
+            let (connector, websocket_connector) = upstream_connector(prepared.upstream_hosts())?;
+            let proxy = Proxy::builder()
+                .with_listener(listener)
+                .with_ca(authority)
+                .with_http_connector(connector)
+                .with_websocket_connector(websocket_connector)
+                .with_http_handler(handler)
+                .with_graceful_shutdown(cancel.clone().cancelled_owned())
+                .build()?;
+            let mut steam_route = state
+                .steam_route
+                .lock()
+                .map_err(|_| anyhow::anyhow!("état Steam indisponible"))?;
+            crate::steam::activate(&mut steam_route, prepared, proxy_address, cancel.clone())?;
+
+            let shared = Arc::clone(&state.shared);
+            let proxy_cancel = cancel.clone();
+            show_startup_status();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = proxy.start().await {
+                    shared.record_proxy_error(error);
+                    proxy_cancel.cancel();
+                }
+            });
+        }
     } else {
-        state.shared.replace(status.clone());
+        let proxy = Proxy::builder()
+            .with_listener(listener)
+            .with_ca(authority)
+            .with_rustls_connector(aws_lc_rs::default_provider())
+            .with_http_handler(handler)
+            .with_graceful_shutdown(cancel.clone().cancelled_owned())
+            .build()?;
+        let shared = Arc::clone(&state.shared);
+        let proxy_cancel = cancel.clone();
+        show_startup_status();
+        tauri::async_runtime::spawn(async move {
+            if let Err(error) = proxy.start().await {
+                shared.record_proxy_error(error);
+                proxy_cancel.cancel();
+            }
+        });
     }
+
     *state
         .cancel
         .lock()
-        .map_err(|_| anyhow::anyhow!("état interne indisponible"))? = Some(cancel);
+        .map_err(|_| anyhow::anyhow!("état interne indisponible"))? = Some(cancel.clone());
 
     #[cfg(target_os = "windows")]
     if steam_mode {
@@ -792,23 +824,16 @@ async fn start_proxy(
         });
     }
 
-    if matches!(
-        phase,
-        "listening" | "siege_listening" | "world_defense_listening"
-    ) {
+    if settles {
         // Binding the socket makes the port available, but the newly spawned
         // proxy task still needs to be polled before it can accept the game's
         // first connection. Do not expose the waiting screen until that task
         // has had a short, bounded readiness window.
         tokio::task::yield_now().await;
         tokio::time::sleep(LISTENER_READY_SETTLE_DELAY).await;
-        let observed = state.shared.snapshot();
-        if matches!(observed.phase.as_str(), "captured" | "error") {
-            return Ok(observed);
-        }
+        return Ok(state.shared.finish_listener_setup(status, &cancel));
     }
 
-    state.shared.replace(status);
     Ok(state.shared.snapshot())
 }
 
@@ -1330,6 +1355,38 @@ mod tests {
         let app_data = Path::new("/tmp/swagex-app-data");
 
         assert_eq!(exports_directory(app_data), app_data.join("exports"),);
+    }
+
+    #[test]
+    fn world_defense_received_while_listener_settles_is_retained() {
+        let directory = tempfile::tempdir().unwrap();
+        let settings = SetupSettings::default();
+        let shared = SharedState {
+            status: Mutex::new(StatusSnapshot {
+                phase: "proxy_setup".into(),
+                ..StatusSnapshot::idle(settings)
+            }),
+        };
+        let listener = CancellationToken::new();
+        let cancelled_listener = CancellationToken::new();
+        cancelled_listener.cancel();
+        let response = serde_json::json!({
+            "command": "GetServerGuildWarDefenseDeckList",
+            "ret_code": 0,
+        });
+
+        shared.record_world_defense(&response, directory.path(), &cancelled_listener);
+        assert_eq!(shared.snapshot().phase, "proxy_setup");
+        shared.record_world_defense(&response, directory.path(), &listener);
+        let observed = shared.finish_listener_setup(
+            StatusSnapshot {
+                phase: "world_defense_listening".into(),
+                ..StatusSnapshot::idle(settings)
+            },
+            &listener,
+        );
+        assert_eq!(observed.phase, "captured");
+        assert!(Path::new(&observed.export_path.unwrap()).is_file());
     }
 
     #[tokio::test]
