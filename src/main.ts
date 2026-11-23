@@ -35,6 +35,7 @@ type StatusSnapshot = {
   certificateTrusted: boolean;
   exportPath?: string;
   profileName?: string;
+  captureMode?: "disabled" | "account" | "siege";
   siegeMatchupCaptured: boolean;
   siegeAttackLogCaptured: boolean;
   siegeDefenseLogCaptured: boolean;
@@ -79,6 +80,7 @@ const elements = {
   siegeDefenseStep: document.querySelector<HTMLElement>("[data-siege-step='defense']")!,
   exportName: document.querySelector<HTMLElement>("#export-name")!,
   revealExport: document.querySelector<HTMLButtonElement>("#reveal-export")!,
+  newExport: document.querySelector<HTMLButtonElement>("#new-export")!,
   quitApp: document.querySelector<HTMLButtonElement>("#quit-app")!,
   errorMessage: document.querySelector<HTMLElement>("#error-message")!,
   retryAction: document.querySelector<HTMLButtonElement>("#retry-action")!,
@@ -238,6 +240,7 @@ function updateStatus(status: StatusSnapshot): void {
   }
 
   if (status.phase === "captured" || status.phase === "account_captured") {
+    elements.newExport.hidden = status.captureMode !== "account";
     elements.includeWorldDefense.hidden = status.phase !== "account_captured";
     elements.exportStatus.textContent = status.message;
     elements.exportReminder.hidden = status.phase === "account_captured";
@@ -273,6 +276,7 @@ function updateStatus(status: StatusSnapshot): void {
   elements.captureAccount.forEach((button) => { button.disabled = actionInProgress; });
   elements.captureSiege.forEach((button) => { button.disabled = actionInProgress; });
   elements.includeWorldDefense.disabled = actionInProgress;
+  elements.newExport.disabled = actionInProgress;
 }
 
 async function refreshStatus(): Promise<void> {
@@ -575,6 +579,11 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   elements.captureSiege.forEach((button) => {
     button.addEventListener("click", () => { startCapture("siege"); });
+  });
+  elements.newExport.addEventListener("click", () => {
+    void runAction("rearm_account_capture").then(() => {
+      if (latestStatus?.phase === "listening") elements.stopListening.focus();
+    });
   });
   elements.includeWorldDefense.addEventListener("click", () => {
     void runAction("start_world_defense_capture");

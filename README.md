@@ -63,6 +63,8 @@ Depuis la version 0.4.0, l’écran de configuration propose directement **Compt
 
 Depuis la version 0.5.1, le mode **Compte** permet d’ajouter les défenses World après la connexion au jeu. Cliquez sur **Inclure Défenses WGB**. Dans Summoners War, ouvrez **Tour de Guilde → Combat → Combat de guilde World → Défense**. Si le placement est déjà ouvert, quittez cet écran puis rouvrez-le. SwagEx ajoute la réponse du jeu à la clé `swagex_world_defense` du même fichier de compte, après vérification de l’identifiant. Vous pouvez aussi terminer avec l’export Compte de base.
 
+Depuis la version 0.5.3, après un export Compte, **Nouvel export** remet SwagEx en attente de la prochaine connexion sans relancer l’application ni modifier le proxy ou le certificat. Cliquez avant de changer de compte dans Summoners War. Chaque compte conserve son JSON nommé avec son pseudo et son identifiant ; une nouvelle capture du même compte remplace son fichier. Les défenses World doivent être ajoutées à nouveau pour chaque capture.
+
 Après capture, le nom du fichier JSON et son icône sont cliquables pour afficher le dossier correspondant dans Finder sur macOS ou l’Explorateur de fichiers sur Windows, puis **Quitter SwagEx** ferme l’application.
 
 Le produit est communautaire et non officiel. SwagEx ne modifie pas le jeu et ne doit pas être utilisé pour automatiser des actions de jeu.
@@ -76,3 +78,11 @@ La clé privée de signature ne doit jamais être ajoutée au dépôt. Pour les 
 Une première installation manuelle reste nécessaire pour passer à cette version équipée de l’updater. Ensuite, une release publiée avec un tag tel que `v0.2.1` sera proposée directement aux utilisateurs déjà installés.
 
 Pour que macOS propose SwagEx dans Spotlight, copiez `SwagEx.app` dans `/Applications` (et non depuis le volume du `.dmg`), puis ouvrez-la une première fois depuis ce dossier. Une application lancée directement depuis le `.dmg` peut ne pas rester disponible dans Spotlight après l’éjection du volume. Sur Windows, installez l’application avec l’installateur `.exe` publié par la release : elle sera alors disponible dans le menu Démarrer.
+
+## Validation locale de la version 0.5.3 — 23 novembre 2026
+
+La compilation frontend, le formatage Rust et les 40 tests natifs en profil release passent. Le test de captures successives vérifie A → B → A, la conservation de deux fichiers distincts, le remplacement du même compte, le rejet des réponses login/World tardives et l’absence de reprise des anciennes défenses World.
+
+Le parcours UI a été contrôlé dans Chrome à 760 × 720 avec une interface native simulée, pour les choix Apple et Steam : styles calculés identiques au bouton principal existant (padding 16 × 24 px, hauteur 56 px, arrondi, typographie et transition), survol, focus clavier, protection contre les doubles clics, actions World et affichage des erreurs. La revue indépendante du code ne relève aucun défaut matériel. La capture réseau réelle en jeu et l’exécution native sous Windows restent à vérifier ; ces simulations ne les remplacent pas.
+
+Le paquet macOS Apple Silicon `src-tauri/target/release/bundle/macos/SwagEx.app` a été construit en version 0.5.3 et sa signature ad hoc vérifiée. Il est conservé pour examen local ; aucune installation ni publication GitHub n’a été effectuée dans cette étape.

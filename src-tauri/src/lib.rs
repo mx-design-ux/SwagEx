@@ -15,9 +15,10 @@ use std::process::Command;
 use proxy::{
     AppState, cancel_export, cancel_steam_export, complete_certificate_setup, complete_proxy_setup,
     complete_windows_certificate_setup, export_status, finish_account_without_world,
-    open_windows_certificate, prepare_steam_export_choice, reset_setup, start_account_capture,
-    start_certificate_setup, start_proxy_setup, start_siege_capture, start_steam_capture,
-    start_windows_certificate_setup, start_world_defense_capture, stop_steam_capture,
+    open_windows_certificate, prepare_steam_export_choice, rearm_account_capture, reset_setup,
+    start_account_capture, start_certificate_setup, start_proxy_setup, start_siege_capture,
+    start_steam_capture, start_windows_certificate_setup, start_world_defense_capture,
+    stop_steam_capture,
 };
 
 /// Reveals an application-private export in the platform file manager without
@@ -91,6 +92,7 @@ pub fn run() {
             complete_windows_certificate_setup,
             prepare_steam_export_choice,
             start_account_capture,
+            rearm_account_capture,
             start_siege_capture,
             start_world_defense_capture,
             finish_account_without_world,

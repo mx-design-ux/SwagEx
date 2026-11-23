@@ -61,9 +61,11 @@ jobs:
           tagName: v__VERSION__
           releaseName: SwagEx v__VERSION__
           releaseBody: |
-            Le bouton **Inclure Défenses WGB** reprend les marges internes des autres boutons. Il ajoute les défenses du Combat de guilde World au JSON du compte.
+            Le bouton **Nouvel export** permet d’enchaîner les exports de plusieurs comptes sans relancer SwagEx. Il reprend le style et les interactions des boutons existants.
 
-            Après l’export Compte, cliquez sur **Inclure Défenses WGB**, puis ouvrez **Tour de Guilde → Combat → Combat de guilde World → Défense** dans Summoners War.
+            Après un export Compte, cliquez sur **Nouvel export**, puis connectez-vous au compte à exporter dans Summoners War. Le proxy et le certificat restent en place. Chaque compte conserve son propre JSON ; une nouvelle capture du même compte remplace son fichier.
+
+            **Inclure Défenses WGB** reste disponible pour chaque nouvelle capture du compte. Les réponses de la capture précédente sont écartées.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

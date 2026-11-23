@@ -133,6 +133,9 @@ pub struct StatusSnapshot {
     pub certificate_trusted: bool,
     pub export_path: Option<String>,
     pub profile_name: Option<String>,
+    pub capture_mode: CaptureMode,
+    #[serde(skip)]
+    capture_generation: u64,
     pub siege_matchup_captured: bool,
     pub siege_attack_log_captured: bool,
     pub siege_defense_log_captured: bool,
@@ -153,6 +156,8 @@ impl StatusSnapshot {
             certificate_trusted: false,
             export_path: None,
             profile_name: None,
+            capture_mode: CaptureMode::Disabled,
+            capture_generation: 0,
             siege_matchup_captured: false,
             siege_attack_log_captured: false,
             siege_defense_log_captured: false,
@@ -178,10 +183,11 @@ impl SharedState {
         response: &Value,
         directory: &Path,
         world_wizard_id: Option<i64>,
+        capture_generation: u64,
         listener: &CancellationToken,
     ) {
         let mut status = self.status.lock().expect("status mutex poisoned");
-        if listener.is_cancelled() {
+        if listener.is_cancelled() || status.capture_generation != capture_generation {
             return;
         }
         let command = response.get("command").and_then(Value::as_str);
@@ -215,6 +221,23 @@ impl SharedState {
                 }
             }
         }
+    }
+
+    fn rearm_account_capture(&self) -> Result<StatusSnapshot, String> {
+        let mut status = self.status.lock().expect("status mutex poisoned");
+        if status.capture_mode != CaptureMode::Account
+            || !matches!(status.phase.as_str(), "account_captured" | "captured")
+        {
+            return Err("Terminez d’abord l’export Compte en cours.".into());
+        }
+        // Keep the listener, certificate and Steam route. Requests already in flight
+        // belong to the previous capture, including late World responses.
+        status.capture_generation = status.capture_generation.wrapping_add(1);
+        status.phase = "listening".into();
+        status.message = "Connectez-vous au compte à exporter dans Summoners War.".into();
+        status.export_path = None;
+        status.profile_name = None;
+        Ok(status.clone())
     }
 
     fn begin_world_defense(&self) -> Result<StatusSnapshot, String> {
@@ -283,8 +306,9 @@ impl SharedState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CaptureMode {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CaptureMode {
     Disabled,
     Account,
     Siege,
@@ -323,6 +347,7 @@ impl Drop for AppState {
 struct CaptureHandler {
     capture_mode: CaptureMode,
     is_profile_request: bool,
+    capture_generation: u64,
     world_wizard_id: Option<Arc<Mutex<Option<i64>>>>,
     certificate_der: Arc<Vec<u8>>,
     certificate_profile: Arc<Vec<u8>>,
@@ -476,6 +501,7 @@ impl HttpHandler for CaptureHandler {
         }
 
         self.is_profile_request = request.uri().path() == PROFILE_PATH;
+        self.capture_generation = self.shared.snapshot().capture_generation;
         self.world_wizard_id = None;
         if self.is_profile_request
             && self.capture_mode == CaptureMode::Account
@@ -519,6 +545,7 @@ impl HttpHandler for CaptureHandler {
                 let output_directory = Arc::clone(&self.output_directory);
                 let shared = Arc::clone(&self.shared);
                 let listener = self.listener.clone();
+                let capture_generation = self.capture_generation;
                 let world_wizard_id = self.world_wizard_id.take();
                 Box::new(move |collected| {
                     tokio::task::spawn_blocking(move || {
@@ -536,6 +563,7 @@ impl HttpHandler for CaptureHandler {
                             &response,
                             &output_directory,
                             wizard_id,
+                            capture_generation,
                             &listener,
                         );
                         Some(())
@@ -761,6 +789,8 @@ async fn start_proxy(
         certificate_trusted,
         export_path: None,
         profile_name: None,
+        capture_mode,
+        capture_generation: 0,
         siege_matchup_captured: false,
         siege_attack_log_captured: false,
         siege_defense_log_captured: false,
@@ -782,6 +812,7 @@ async fn start_proxy(
     let handler = CaptureHandler {
         capture_mode,
         is_profile_request: false,
+        capture_generation: 0,
         world_wizard_id: None,
         certificate_der,
         certificate_profile,
@@ -1070,6 +1101,8 @@ fn windows_certificate_setup_status(
         certificate_trusted,
         export_path: None,
         profile_name: None,
+        capture_mode: CaptureMode::Disabled,
+        capture_generation: 0,
         siege_matchup_captured: false,
         siege_attack_log_captured: false,
         siege_defense_log_captured: false,
@@ -1184,6 +1217,8 @@ fn export_choice_status(settings: SetupSettings) -> StatusSnapshot {
         certificate_trusted: settings.windows_certificate_setup_completed,
         export_path: None,
         profile_name: None,
+        capture_mode: CaptureMode::Disabled,
+        capture_generation: 0,
         siege_matchup_captured: false,
         siege_attack_log_captured: false,
         siege_defense_log_captured: false,
@@ -1291,6 +1326,21 @@ pub async fn start_account_capture(
     steam_mode: bool,
 ) -> Result<StatusSnapshot, String> {
     start_capture_mode(app, &state, CaptureMode::Account, steam_mode).await
+}
+
+#[tauri::command]
+pub fn rearm_account_capture(state: State<'_, AppState>) -> Result<StatusSnapshot, String> {
+    let active = state
+        .cancel
+        .lock()
+        .map_err(|_| "état interne indisponible")?;
+    if !active
+        .as_ref()
+        .is_some_and(|listener| !listener.is_cancelled())
+    {
+        return Err("L’écoute est arrêtée. Relancez l’export Compte.".into());
+    }
+    state.shared.rearm_account_capture()
 }
 
 #[tauri::command]
@@ -1422,20 +1472,20 @@ mod tests {
             "command": "HubUserLogin", "wizard_id": 42,
             "building_list": [], "unit_list": [], "runes": []
         });
-        shared.record_account_response(&profile, directory.path(), None, &listener);
+        shared.record_account_response(&profile, directory.path(), None, 0, &listener);
         let account = shared.finish_listener_setup(StatusSnapshot::idle(settings), &listener);
         assert_eq!(account.phase, "account_captured");
         let path = account.export_path.unwrap();
         let old = std::fs::read(&path).unwrap();
         let response = serde_json::json!({"command": WORLD_DEFENSE_COMMAND, "ret_code": 0});
-        shared.record_account_response(&response, directory.path(), Some(42), &listener);
+        shared.record_account_response(&response, directory.path(), Some(42), 0, &listener);
         assert_eq!(std::fs::read(&path).unwrap(), old);
 
         shared.begin_world_defense().unwrap();
-        shared.record_account_response(&response, directory.path(), Some(99), &listener);
+        shared.record_account_response(&response, directory.path(), Some(99), 0, &listener);
         assert_eq!(shared.snapshot().phase, "world_defense_listening");
         assert_eq!(std::fs::read(&path).unwrap(), old);
-        shared.record_account_response(&response, directory.path(), Some(42), &listener);
+        shared.record_account_response(&response, directory.path(), Some(42), 0, &listener);
         assert_eq!(shared.snapshot().phase, "captured");
         assert_eq!(
             shared.snapshot().export_path.as_deref(),
@@ -1449,6 +1499,99 @@ mod tests {
         assert_eq!(finished.message, shared.snapshot().message);
         assert_eq!(finished.export_path.as_deref(), Some(path.as_str()));
         assert_eq!(std::fs::read(&path).unwrap(), enriched);
+    }
+
+    #[test]
+    fn repeated_account_exports_keep_the_listener_and_isolate_accounts_and_world() {
+        let directory = tempfile::tempdir().unwrap();
+        let shared = SharedState {
+            status: Mutex::new(StatusSnapshot {
+                phase: "listening".into(),
+                capture_mode: CaptureMode::Account,
+                local_ip: Some("192.168.1.24".into()),
+                port: Some(8080),
+                ..StatusSnapshot::idle(SetupSettings::default())
+            }),
+        };
+        let listener = CancellationToken::new();
+        let profile = |id, name, marker| {
+            serde_json::json!({
+                "command": "HubUserLogin", "wizard_id": id,
+                "wizard_info": {"wizard_id": id, "wizard_name": name},
+                "building_list": [], "unit_list": [], "runes": [], "marker": marker
+            })
+        };
+        let world = serde_json::json!({"command": WORLD_DEFENSE_COMMAND, "ret_code": 0});
+        shared.record_account_response(&profile(42, "A", 1), directory.path(), None, 0, &listener);
+        let path_a = shared.snapshot().export_path.unwrap();
+        let rearmed = shared.rearm_account_capture().unwrap();
+        assert_eq!(rearmed.phase, "listening");
+        assert!(rearmed.export_path.is_none() && rearmed.profile_name.is_none());
+        assert_eq!(rearmed.local_ip.as_deref(), Some("192.168.1.24"));
+        assert_eq!(rearmed.port, Some(8080));
+        assert!(!listener.is_cancelled());
+        assert!(shared.rearm_account_capture().is_err());
+        // A late login from the old capture must not complete the new one.
+        shared.record_account_response(
+            &profile(42, "A", 999),
+            directory.path(),
+            None,
+            0,
+            &listener,
+        );
+        assert_eq!(shared.snapshot().phase, "listening");
+        shared.record_account_response(&profile(99, "B", 2), directory.path(), None, 1, &listener);
+        let path_b = shared.snapshot().export_path.unwrap();
+        assert_ne!(path_a, path_b);
+        shared.begin_world_defense().unwrap();
+        assert!(shared.rearm_account_capture().is_err());
+        shared.record_account_response(&world, directory.path(), Some(42), 1, &listener);
+        assert_eq!(shared.snapshot().phase, "world_defense_listening");
+        shared.record_account_response(&world, directory.path(), Some(99), 1, &listener);
+        let saved_b = std::fs::read(&path_b).unwrap();
+        shared.rearm_account_capture().unwrap();
+        shared.record_account_response(&profile(42, "A", 3), directory.path(), None, 2, &listener);
+        assert_eq!(
+            shared.snapshot().export_path.as_deref(),
+            Some(path_a.as_str())
+        );
+        shared.begin_world_defense().unwrap();
+        // Even a matching account id cannot admit a response from an old capture.
+        shared.record_account_response(&world, directory.path(), Some(42), 0, &listener);
+        assert_eq!(shared.snapshot().phase, "world_defense_listening");
+        shared.record_account_response(&world, directory.path(), Some(42), 2, &listener);
+        assert_eq!(shared.snapshot().phase, "captured");
+        let saved_a: Value = serde_json::from_slice(&std::fs::read(&path_a).unwrap()).unwrap();
+        assert_eq!(saved_a["marker"], 3);
+        assert_eq!(saved_a["swagex_world_defense"]["wizard_id"], 42);
+        assert_eq!(std::fs::read(&path_b).unwrap(), saved_b);
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 2);
+        // A fresh recapture must not retain the previous World enrichment.
+        shared.rearm_account_capture().unwrap();
+        shared.record_account_response(&profile(42, "A", 4), directory.path(), None, 3, &listener);
+        let latest: Value = serde_json::from_slice(&std::fs::read(&path_a).unwrap()).unwrap();
+        assert!(latest.get("swagex_world_defense").is_none());
+        assert_eq!(latest["marker"], 4);
+        listener.cancel();
+        shared.rearm_account_capture().unwrap();
+        shared.record_account_response(&profile(99, "B", 5), directory.path(), None, 4, &listener);
+        assert_eq!(shared.snapshot().phase, "listening");
+        assert_eq!(std::fs::read(&path_b).unwrap(), saved_b);
+    }
+
+    #[test]
+    fn new_account_export_rejects_siege_and_setup_states() {
+        for mode in [CaptureMode::Disabled, CaptureMode::Siege] {
+            let shared = SharedState {
+                status: Mutex::new(StatusSnapshot {
+                    phase: "captured".into(),
+                    capture_mode: mode,
+                    ..StatusSnapshot::idle(SetupSettings::default())
+                }),
+            };
+            assert!(shared.rearm_account_capture().is_err());
+            assert_eq!(shared.snapshot().phase, "captured");
+        }
     }
 
     #[tokio::test]
