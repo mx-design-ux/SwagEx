@@ -56,7 +56,9 @@
               <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Réglages <span class="path-separator">›</span> Général <span class="path-separator">›</span> Informations <span class="path-separator">›</span> Réglages des certificats <span class="path-separator">›</span> Activez <strong>SwagEx</strong></span></li>
             </ol>
           </div>
-          <button class="bottom-action primary-action" id="certificate-done" type="button">J’ai terminé&nbsp;!</button>
+          <div class="bottom-actions">
+            <button class="action-button action-button--primary" id="certificate-done" type="button">J’ai terminé&nbsp;!</button>
+          </div>
         </section>
 
         <section class="flow-screen windows-certificate-screen" id="windows-certificate-screen" data-screen="windows-certificate" hidden aria-labelledby="windows-certificate-title">
@@ -69,10 +71,12 @@
             <li><span class="step-number" aria-hidden="true"></span><span class="step-copy">Sélectionnez <strong>Autorités de certification racines de confiance</strong> <span class="path-separator">›</span> OK <span class="path-separator">›</span> Suivant <span class="path-separator">›</span> Terminer</span></li>
           </ol>
           <p class="windows-certificate-status" id="windows-certificate-status" role="status" hidden></p>
-          <button class="bottom-action primary-action" id="windows-certificate-action" type="button">J’ai terminé&nbsp;!</button>
-          <div class="bottom-actions windows-capture-actions" id="windows-capture-actions" hidden>
-            <button class="bottom-action primary-action capture-account" type="button">Compte</button>
-            <button class="bottom-action secondary-action capture-siege" type="button">Siège</button>
+          <div class="bottom-actions">
+            <button class="action-button action-button--primary" id="windows-certificate-action" type="button">J’ai terminé&nbsp;!</button>
+          </div>
+          <div class="bottom-actions" id="windows-capture-actions" hidden>
+            <button class="action-button action-button--primary capture-account" type="button">Compte</button>
+            <button class="action-button action-button--secondary capture-siege" type="button">Siège</button>
           </div>
         </section>
 
@@ -89,9 +93,9 @@
               </li>
             </ol>
           </div>
-          <div class="bottom-actions proxy-actions">
-            <button class="bottom-action primary-action capture-account" type="button">Compte</button>
-            <button class="bottom-action secondary-action capture-siege" type="button">Siège</button>
+          <div class="bottom-actions">
+            <button class="action-button action-button--primary capture-account" type="button">Compte</button>
+            <button class="action-button action-button--secondary capture-siege" type="button">Siège</button>
           </div>
         </section>
 
@@ -108,7 +112,9 @@
               <p id="world-defense-status" role="status" hidden></p>
             </div>
           </div>
-          <button class="bottom-action secondary-action" id="stop-listening" type="button">Arrêter l’écoute</button>
+          <div class="bottom-actions">
+            <button class="action-button action-button--secondary" id="stop-listening" type="button">Arrêter l’écoute</button>
+          </div>
         </section>
 
         <section class="flow-screen siege-screen" id="siege-screen" data-screen="siege" hidden aria-labelledby="siege-title">
@@ -119,7 +125,9 @@
             <li data-siege-step="attack"><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez <strong>Combat d’occupation</strong> <span class="path-separator" aria-hidden="true">›</span> <strong>Infos</strong></span></li>
             <li data-siege-step="defense"><span class="step-number" aria-hidden="true"></span><span class="step-copy">Ouvrez <strong>Défense</strong></span></li>
           </ol>
-          <button class="bottom-action secondary-action" id="stop-siege-listening" type="button">Arrêter l’écoute</button>
+          <div class="bottom-actions">
+            <button class="action-button action-button--secondary" id="stop-siege-listening" type="button">Arrêter l’écoute</button>
+          </div>
         </section>
 
         <section class="flow-screen json-screen" id="json-screen" data-screen="json" hidden aria-labelledby="json-title">
@@ -134,9 +142,9 @@
             <p id="export-reminder" class="export-reminder">Vous pouvez désactiver le proxy dans les paramètres Wi‑Fi de l’appareil. Bon jeu&nbsp;!</p>
           </div>
           <div class="bottom-actions">
-            <button class="bottom-action primary-action" id="new-export" type="button" hidden>Nouvel export</button>
-            <button class="bottom-action secondary-action" id="include-world-defense" type="button" hidden>Inclure Défenses WGB</button>
-            <button class="bottom-action secondary-action" id="quit-app" type="button">Quitter SwagEx</button>
+            <button class="action-button action-button--primary" id="new-export" type="button" hidden>Nouvel export</button>
+            <button class="action-button action-button--secondary" id="include-world-defense" type="button" hidden>Inclure Défenses WGB</button>
+            <button class="action-button action-button--secondary" id="quit-app" type="button">Quitter SwagEx</button>
           </div>
           <h1 id="json-title" class="visually-hidden">Export JSON terminé</h1>
         </section>
@@ -144,7 +152,7 @@
         <section class="flow-screen error-screen" id="error-screen" data-screen="error" hidden aria-labelledby="error-title">
           <h1 id="error-title">Impossible de démarrer SwagEx</h1>
           <p id="error-message" role="alert">—</p>
-          <button class="bottom-action primary-action" id="retry-action" type="button">Réessayer</button>
+          <button class="action-button action-button--primary" id="retry-action" type="button">Réessayer</button>
         </section>
 
         <section class="update-dialog" id="update-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="update-title">

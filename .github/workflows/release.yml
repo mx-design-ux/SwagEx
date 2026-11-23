@@ -61,11 +61,8 @@ jobs:
           tagName: v__VERSION__
           releaseName: SwagEx v__VERSION__
           releaseBody: |
-            Le bouton **Nouvel export** permet d’enchaîner les exports de plusieurs comptes sans relancer SwagEx. Il reprend le style et les interactions des boutons existants.
+            Les boutons d’action s’ajustent à leur libellé. « Terminer sans World » retrouve les mêmes marges intérieures que les autres boutons.
 
-            Après un export Compte, cliquez sur **Nouvel export**, puis connectez-vous au compte à exporter dans Summoners War. Le proxy et le certificat restent en place. Chaque compte conserve son propre JSON ; une nouvelle capture du même compte remplace son fichier.
-
-            **Inclure Défenses WGB** reste disponible pour chaque nouvelle capture du compte. Les réponses de la capture précédente sont écartées.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

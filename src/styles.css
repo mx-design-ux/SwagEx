@@ -156,43 +156,41 @@ button:disabled { cursor: wait; opacity: .48; }
 .device-choice:disabled img,
 .device-choice:disabled span { opacity: .1; }
 
-.bottom-action {
-  position: absolute;
-  bottom: 32px;
-  left: 50%;
+.action-button {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  height: 56px;
+  inline-size: max-content;
+  max-inline-size: 100%;
+  min-block-size: 56px;
   margin: 0;
   padding: 16px 24px;
+  border: 0;
   border-radius: 999px;
   appearance: none;
   cursor: pointer;
-  transform: translateX(-50%);
   font-size: 20px;
   font-weight: 600;
   line-height: 24px;
-  white-space: nowrap;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
-.primary-action {
-  border: 0;
+.action-button--primary {
   color: #111;
   background: #fff;
   transition: background-color 200ms ease-in-out;
 }
-.primary-action:not(:disabled):hover { background-color: var(--gold); }
-.secondary-action {
-  border: 1px solid var(--line);
+.action-button--primary:not(:disabled):hover { background-color: var(--gold); }
+.action-button--secondary {
   color: #6e6e6e;
   background: transparent;
-  transition:
-    border-color 200ms ease-in-out,
-    color 200ms ease-in-out;
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition: box-shadow 200ms ease-in-out, color 200ms ease-in-out;
 }
-.secondary-action:not(:disabled):hover {
-  border-color: var(--gold);
+.action-button--secondary:not(:disabled):hover {
   color: var(--gold);
+  box-shadow: inset 0 0 0 1px var(--gold);
 }
 
 .certificate-layout {
@@ -260,11 +258,6 @@ button:disabled { cursor: wait; opacity: .48; }
   transform: translateY(-1px);
 }
 .certificate-steps { row-gap: 32px; align-content: start; }
-.certificate-screen .bottom-action {
-  left: 297px;
-  width: 167px;
-  transform: none;
-}
 .step-list strong { color: var(--gold); font-weight: 700; }
 .path-separator { color: rgb(255 255 255 / 30%); }
 
@@ -300,16 +293,13 @@ button:disabled { cursor: wait; opacity: .48; }
 .proxy-values strong { color: var(--gold); font-weight: 700; white-space: nowrap; }
 .bottom-actions {
   position: absolute;
-  right: 0;
+  inset-inline: 24px;
   bottom: 32px;
-  left: 0;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 16px;
 }
-.bottom-actions .bottom-action { position: static; transform: none; }
-.proxy-actions .capture-account,
-.proxy-actions .capture-siege { width: 140px; }
 
 .windows-certificate-steps {
   position: absolute;
@@ -329,8 +319,6 @@ button:disabled { cursor: wait; opacity: .48; }
   font-size: 15px;
   line-height: 1.25;
 }
-.windows-certificate-screen .bottom-action { width: 234px; }
-.windows-capture-actions .bottom-action { width: 174px; }
 
 .siege-steps {
   position: absolute;
@@ -450,18 +438,10 @@ button:disabled { cursor: wait; opacity: .48; }
   font-size: 20px;
   line-height: 24px;
 }
-.waiting-screen .bottom-action,
-.siege-screen .bottom-action {
-  left: 285px;
-  width: 191px;
-  transform: none;
-}
-.json-screen .bottom-action { min-width: 190px; }
 
 .error-screen { display: grid; place-items: center; align-content: center; gap: 18px; padding: 0 70px; }
 .error-screen h1 { margin: 0; color: #f3f3f3; font-size: 25px; }
 .error-screen p { max-width: 560px; margin: 0; color: #bbb; text-align: center; }
-.error-screen .bottom-action { position: static; transform: none; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 .update-dialog { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(24, 24, 24, .84); }

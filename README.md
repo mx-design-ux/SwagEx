@@ -86,3 +86,9 @@ La compilation frontend, le formatage Rust et les 40 tests natifs en profil rele
 Le parcours UI a été contrôlé dans Chrome à 760 × 720 avec une interface native simulée, pour les choix Apple et Steam : styles calculés identiques au bouton principal existant (padding 16 × 24 px, hauteur 56 px, arrondi, typographie et transition), survol, focus clavier, protection contre les doubles clics, actions World et affichage des erreurs. La revue indépendante du code ne relève aucun défaut matériel. La capture réseau réelle en jeu et l’exécution native sous Windows restent à vérifier ; ces simulations ne les remplacent pas.
 
 Le paquet macOS Apple Silicon `src-tauri/target/release/bundle/macos/SwagEx.app` a été construit en version 0.5.3 et sa signature ad hoc vérifiée. Il est conservé pour examen local ; aucune installation ni publication GitHub n’a été effectuée dans cette étape.
+
+## Boutons d’action 0.5.4
+
+Les actions du parcours réutilisent `.action-button` et ses deux variantes. Le composant dimensionne le bouton d’après son libellé avec un padding de 16 × 24 px. `.bottom-actions` aligne le groupe dans le pied d’écran. Pour valider les marges, mesurer la distance entre le texte rendu et les bords du bouton sur les écrans concernés, notamment après le passage à « Terminer sans World ».
+
+En Chrome, avec les commandes natives simulées, 18 contrôles d’écran passent sur les parcours Apple et Steam. Le libellé « Terminer sans World » passe de 1,5 px à 24 px de marge horizontale par côté, pour une hauteur de 56 px. Le survol et le focus ont été vérifiés sur ce bouton. Le paquet macOS Apple Silicon 0.5.4 a été construit et sa signature ad hoc vérifiée.
